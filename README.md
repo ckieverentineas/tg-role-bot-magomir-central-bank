@@ -42,6 +42,12 @@ npm run dev
 /set_balance <allianceId> <currencyId> <telegramId|reply> <amount>
 /create_shop <allianceId> <name>
 /create_item <shopId> <currencyId> <price> <stock|none> <name>
+/adjust_balance <allianceId> <currencyId> <telegramId|reply> <+/-amount> [comment]
+/profile [telegramId|reply]
+/balance <allianceId> [telegramId|reply]
+/alliance_info <allianceId>
+/shop <shopId>
+/inventory [telegramId|reply]
 /sbp <allianceId> <currencyId> <receiverTelegramId|reply> <amount> [comment]
 /buy <itemId> <quantity>
 ```

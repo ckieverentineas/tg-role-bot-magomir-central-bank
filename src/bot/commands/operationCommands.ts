@@ -14,6 +14,7 @@ import { TelegramUserService } from "../../application/users/telegramUserService
 import { parsePositiveInteger, parsePositiveNumber, type ParseResult } from "../../application/limits/limitPeriodInput.js";
 import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
 import type { BotContext } from "../context.js";
+import { sendOperationLog } from "../logDelivery.js";
 import {
   getTelegramUserProfile,
   parseTelegramUserRef,
@@ -176,21 +177,6 @@ function getCommandArgs(ctx: BotContext): string[] {
   const [, ...args] = text.trim().split(/\s+/);
 
   return args;
-}
-
-async function sendOperationLog(
-  logRoutingService: LogRoutingService,
-  telegramLogSink: TelegramLogSink,
-  operation: Pick<ExecutedSbpTransfer | ExecutedShopPurchase, "allianceId" | "logEventType" | "logText">
-): Promise<void> {
-  const targets = await logRoutingService.resolveDeliveryTargets(operation.allianceId, operation.logEventType);
-  const results = await Promise.allSettled(targets.map((target) => telegramLogSink.send(target, operation.logText)));
-
-  for (const result of results) {
-    if (result.status === "rejected") {
-      console.error("Failed to send operation log", result.reason);
-    }
-  }
 }
 
 function formatTransferSuccess(transfer: ExecutedSbpTransfer): string {

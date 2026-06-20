@@ -1,6 +1,8 @@
 import { Bot } from "grammy";
 import type { PrismaClient } from "@prisma/client";
+import { BalanceAdjustmentService } from "../application/banking/balanceAdjustmentService.js";
 import { LogRoutingService } from "../application/logs/logRoutingService.js";
+import { AccountQueryService } from "../application/read/accountQueryService.js";
 import { SbpTransferRuleAdminService } from "../application/sbp/sbpTransferRuleAdminService.js";
 import { SbpTransferExecutionService } from "../application/sbp/sbpTransferExecutionService.js";
 import { AdminSetupService } from "../application/setup/adminSetupService.js";
@@ -10,9 +12,11 @@ import { TelegramUserService } from "../application/users/telegramUserService.js
 import type { AppConfig } from "../config/env.js";
 import { TelegramLogSink } from "../infrastructure/telegram/telegramLogSink.js";
 import { registerHealthCommand } from "./commands/healthCommand.js";
+import { registerBalanceAdminCommands } from "./commands/balanceAdminCommands.js";
 import { registerLimitCommands } from "./commands/limitCommands.js";
 import { registerLogBindingCommands } from "./commands/logBindingCommands.js";
 import { registerOperationCommands } from "./commands/operationCommands.js";
+import { registerQueryCommands } from "./commands/queryCommands.js";
 import { registerSetupCommands } from "./commands/setupCommands.js";
 import { registerStartCommand } from "./commands/startCommand.js";
 import type { BotContext } from "./context.js";
@@ -27,11 +31,15 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
   const telegramUserService = new TelegramUserService(db);
   const telegramLogSink = new TelegramLogSink(bot);
   const adminSetupService = new AdminSetupService(db);
+  const accountQueryService = new AccountQueryService(db);
+  const balanceAdjustmentService = new BalanceAdjustmentService(db);
 
   registerStartCommand(bot);
   registerHealthCommand(bot);
+  registerQueryCommands(bot, accountQueryService);
   registerLogBindingCommands(bot, logRoutingService, config);
   registerSetupCommands(bot, adminSetupService, config);
+  registerBalanceAdminCommands(bot, balanceAdjustmentService, logRoutingService, telegramLogSink, config);
   registerLimitCommands(bot, sbpRuleAdminService, shopItemLimitAdminService, config);
   registerOperationCommands(
     bot,
