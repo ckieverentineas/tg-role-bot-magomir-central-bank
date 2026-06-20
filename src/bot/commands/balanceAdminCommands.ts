@@ -4,11 +4,11 @@ import type {
   BalanceAdjustmentResult,
   BalanceAdjustmentService
 } from "../../application/banking/balanceAdjustmentService.js";
+import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import { parsePositiveInteger, type ParseResult } from "../../application/limits/limitPeriodInput.js";
 import type { LogRoutingService } from "../../application/logs/logRoutingService.js";
-import type { AppConfig } from "../../config/env.js";
 import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
-import { requireAdmin } from "../middleware/adminOnly.js";
+import { requireAllianceAdmin } from "../middleware/adminOnly.js";
 import { sendOperationLog } from "../logDelivery.js";
 import { parseTelegramUserRef, resolveTelegramUserProfile, type TelegramUserRef } from "../telegramProfiles.js";
 import type { BotContext } from "../context.js";
@@ -24,16 +24,16 @@ export function registerBalanceAdminCommands(
   balanceAdjustmentService: BalanceAdjustmentService,
   logRoutingService: LogRoutingService,
   telegramLogSink: TelegramLogSink,
-  config: AppConfig
+  authorizationService: AuthorizationService
 ): void {
   bot.command("adjust_balance", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseAdjustBalanceArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
       return;
     }
 

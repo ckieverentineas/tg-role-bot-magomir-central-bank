@@ -55,3 +55,5 @@ npm run dev
 Типы логов: `finance`, `progression`, `purchase`, `admin`, `security`, `system`.
 
 Периоды лимитов: `unlimited`, `day`, `week`, `month`, произвольные длительности (`10d`, `2w`, `3month`), `until:2026-07-01`, `2026-06-01..2026-07-01`.
+
+Права: глобальные админы из `ADMIN_TELEGRAM_IDS` могут всё. Команды управления конкретной ролевой также доступны участникам этой ролевой с ролью `BANK_ADMIN` или `SUPER_ADMIN`; `/create_alliance` и `/bind_super_log` остаются глобальными.

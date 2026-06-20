@@ -1,8 +1,9 @@
 import type { Bot } from "grammy";
 import type { LogRoutingService } from "../../application/logs/logRoutingService.js";
+import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import type { AppConfig } from "../../config/env.js";
 import { LOG_EVENT_TYPE, type LogEventType } from "../../domain/logs/logEventType.js";
-import { requireAdmin } from "../middleware/adminOnly.js";
+import { requireAdmin, requireAllianceAdmin } from "../middleware/adminOnly.js";
 import type { BotContext } from "../context.js";
 
 const LOG_EVENT_TYPE_BY_ALIAS: Readonly<Record<string, LogEventType>> = {
@@ -29,17 +30,18 @@ const LOG_EVENT_TYPE_BY_ALIAS: Readonly<Record<string, LogEventType>> = {
 export function registerLogBindingCommands(
   bot: Bot<BotContext>,
   logRoutingService: LogRoutingService,
+  authorizationService: AuthorizationService,
   config: AppConfig
 ): void {
   bot.command("bind_log", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseBindLogArgs(getCommandArgs(ctx));
 
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
       return;
     }
 

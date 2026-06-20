@@ -13,6 +13,7 @@ import type {
   ShopItemView,
   ShopView
 } from "../../application/setup/adminSetupService.js";
+import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import {
   parseNonNegativeNumber,
   parsePositiveInteger,
@@ -20,7 +21,7 @@ import {
 } from "../../application/limits/limitPeriodInput.js";
 import type { AppConfig } from "../../config/env.js";
 import { parseBankRole, type BankRole } from "../../domain/users/bankRole.js";
-import { requireAdmin } from "../middleware/adminOnly.js";
+import { requireAdmin, requireAllianceAdmin, requireShopAdmin } from "../middleware/adminOnly.js";
 import { parseTelegramUserRef, resolveTelegramUserProfile, type TelegramUserRef } from "../telegramProfiles.js";
 import type { BotContext } from "../context.js";
 
@@ -45,6 +46,7 @@ export type ParsedSetBalanceCommand = Omit<AddMemberInput, "user" | "role"> & {
 export function registerSetupCommands(
   bot: Bot<BotContext>,
   adminSetupService: AdminSetupService,
+  authorizationService: AuthorizationService,
   config: AppConfig
 ): void {
   bot.command("create_alliance", async (ctx) => {
@@ -77,6 +79,10 @@ export function registerSetupCommands(
       return;
     }
 
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
+      return;
+    }
+
     try {
       const currency = await adminSetupService.createCurrency(parsed.value);
       await ctx.reply(formatCurrency(currency));
@@ -93,6 +99,10 @@ export function registerSetupCommands(
     const parsed = parseAddMemberArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
       return;
     }
 
@@ -122,6 +132,10 @@ export function registerSetupCommands(
     const parsed = parseSetBalanceArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
       return;
     }
 
@@ -155,6 +169,10 @@ export function registerSetupCommands(
       return;
     }
 
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
+      return;
+    }
+
     try {
       const shop = await adminSetupService.createShop(parsed.value);
       await ctx.reply(formatShop(shop));
@@ -171,6 +189,10 @@ export function registerSetupCommands(
     const parsed = parseCreateShopItemArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireShopAdmin(ctx, authorizationService, parsed.value.shopId))) {
       return;
     }
 

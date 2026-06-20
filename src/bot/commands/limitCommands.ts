@@ -9,6 +9,7 @@ import type {
   ShopItemLimitAdminService,
   ShopItemLimitView
 } from "../../application/shop/shopItemLimitAdminService.js";
+import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import {
   parseLimitPeriodToken,
   parseNonNegativeNumber,
@@ -18,7 +19,7 @@ import {
   type ParseResult
 } from "../../application/limits/limitPeriodInput.js";
 import type { AppConfig } from "../../config/env.js";
-import { requireAdmin } from "../middleware/adminOnly.js";
+import { requireAllianceAdmin, requireShopItemAdmin } from "../middleware/adminOnly.js";
 import type { BotContext } from "../context.js";
 
 const SET_SBP_LIMIT_USAGE =
@@ -31,17 +32,17 @@ export function registerLimitCommands(
   bot: Bot<BotContext>,
   sbpRuleAdminService: SbpTransferRuleAdminService,
   shopItemLimitAdminService: ShopItemLimitAdminService,
-  config: AppConfig
+  authorizationService: AuthorizationService
 ): void {
   bot.command("set_sbp_limit", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseSetSbpLimitArgs(getCommandArgs(ctx));
 
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
       return;
     }
 
@@ -54,14 +55,14 @@ export function registerLimitCommands(
   });
 
   bot.command("set_item_limit", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseSetShopItemLimitArgs(getCommandArgs(ctx));
 
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireShopItemAdmin(ctx, authorizationService, parsed.value.itemId))) {
       return;
     }
 

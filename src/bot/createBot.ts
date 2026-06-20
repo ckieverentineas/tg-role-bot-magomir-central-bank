@@ -1,5 +1,6 @@
 import { Bot } from "grammy";
 import type { PrismaClient } from "@prisma/client";
+import { AuthorizationService } from "../application/auth/authorizationService.js";
 import { BalanceAdjustmentService } from "../application/banking/balanceAdjustmentService.js";
 import { LogRoutingService } from "../application/logs/logRoutingService.js";
 import { AccountQueryService } from "../application/read/accountQueryService.js";
@@ -33,14 +34,15 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
   const adminSetupService = new AdminSetupService(db);
   const accountQueryService = new AccountQueryService(db);
   const balanceAdjustmentService = new BalanceAdjustmentService(db);
+  const authorizationService = new AuthorizationService(db, config);
 
   registerStartCommand(bot);
   registerHealthCommand(bot);
   registerQueryCommands(bot, accountQueryService);
-  registerLogBindingCommands(bot, logRoutingService, config);
-  registerSetupCommands(bot, adminSetupService, config);
-  registerBalanceAdminCommands(bot, balanceAdjustmentService, logRoutingService, telegramLogSink, config);
-  registerLimitCommands(bot, sbpRuleAdminService, shopItemLimitAdminService, config);
+  registerLogBindingCommands(bot, logRoutingService, authorizationService, config);
+  registerSetupCommands(bot, adminSetupService, authorizationService, config);
+  registerBalanceAdminCommands(bot, balanceAdjustmentService, logRoutingService, telegramLogSink, authorizationService);
+  registerLimitCommands(bot, sbpRuleAdminService, shopItemLimitAdminService, authorizationService);
   registerOperationCommands(
     bot,
     telegramUserService,
