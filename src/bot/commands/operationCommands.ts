@@ -1,4 +1,4 @@
-import type { Bot, Context } from "grammy";
+import type { Bot } from "grammy";
 import type { LogRoutingService } from "../../application/logs/logRoutingService.js";
 import type {
   ExecuteSbpTransferInput,
@@ -10,23 +10,25 @@ import type {
   ExecuteShopPurchaseInput,
   ShopPurchaseExecutionService
 } from "../../application/shop/shopPurchaseExecutionService.js";
-import { TelegramUserService, type TelegramUserProfile } from "../../application/users/telegramUserService.js";
+import { TelegramUserService } from "../../application/users/telegramUserService.js";
 import { parsePositiveInteger, parsePositiveNumber, type ParseResult } from "../../application/limits/limitPeriodInput.js";
 import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
 import type { BotContext } from "../context.js";
+import {
+  getTelegramUserProfile,
+  parseTelegramUserRef,
+  resolveTelegramUserProfile,
+  type TelegramUserRef
+} from "../telegramProfiles.js";
 
 const SBP_USAGE = "Формат: /sbp <allianceId> <currencyId> <receiverTelegramId|reply> <amount> [comment]";
 const BUY_USAGE = "Формат: /buy <itemId> <quantity>";
-
-export type SbpReceiverInput =
-  | { kind: "telegram_id"; telegramId: bigint }
-  | { kind: "reply" };
 
 export type ParsedSbpTransferCommand = Omit<
   ExecuteSbpTransferInput,
   "senderUserId" | "receiverUserId" | "now"
 > & {
-  receiver: SbpReceiverInput;
+  receiver: TelegramUserRef;
 };
 
 export type ParsedBuyCommandInput = Omit<ExecuteShopPurchaseInput, "userId" | "now">;
@@ -52,7 +54,7 @@ export function registerOperationCommands(
       return;
     }
 
-    const receiverProfile = resolveReceiverProfile(ctx, parsed.value.receiver);
+    const receiverProfile = resolveTelegramUserProfile(ctx, parsed.value.receiver);
     if (!receiverProfile.ok) {
       await ctx.reply(receiverProfile.message);
       return;
@@ -121,7 +123,7 @@ export function parseSbpTransferArgs(args: readonly string[]): ParseResult<Parse
     return currencyId;
   }
 
-  const receiver = parseReceiver(args[2]);
+  const receiver = parseTelegramUserRef(args[2]);
   if (!receiver.ok) {
     return receiver;
   }
@@ -166,75 +168,6 @@ export function parseBuyArgs(args: readonly string[]): ParseResult<ParsedBuyComm
       itemId: itemId.value,
       quantity: quantity.value
     }
-  };
-}
-
-function parseReceiver(token: string | undefined): ParseResult<SbpReceiverInput> {
-  if (token === undefined) {
-    return { ok: false, message: SBP_USAGE };
-  }
-
-  if (["reply", "ответ", "реплай"].includes(token.trim().toLowerCase())) {
-    return {
-      ok: true,
-      value: {
-        kind: "reply"
-      }
-    };
-  }
-
-  if (!/^\d+$/.test(token)) {
-    return {
-      ok: false,
-      message: "receiverTelegramId должен быть числовым Telegram ID или reply."
-    };
-  }
-
-  return {
-    ok: true,
-    value: {
-      kind: "telegram_id",
-      telegramId: BigInt(token)
-    }
-  };
-}
-
-function resolveReceiverProfile(ctx: BotContext, receiver: SbpReceiverInput): ParseResult<TelegramUserProfile> {
-  if (receiver.kind === "telegram_id") {
-    return {
-      ok: true,
-      value: {
-        telegramId: receiver.telegramId,
-        displayName: `tg:${receiver.telegramId.toString()}`
-      }
-    };
-  }
-
-  const replyFrom = ctx.message?.reply_to_message?.from;
-  const profile = getTelegramUserProfile(replyFrom);
-
-  if (!profile) {
-    return {
-      ok: false,
-      message: "Ответьте командой на сообщение получателя или укажите receiverTelegramId."
-    };
-  }
-
-  return { ok: true, value: profile };
-}
-
-function getTelegramUserProfile(from: Context["from"] | undefined): TelegramUserProfile | null {
-  if (!from || from.is_bot) {
-    return null;
-  }
-
-  const lastName = "last_name" in from ? from.last_name : undefined;
-  const displayName = [from.first_name, lastName].filter(Boolean).join(" ").trim();
-
-  return {
-    telegramId: BigInt(from.id),
-    ...(from.username ? { username: from.username } : {}),
-    displayName: displayName || `tg:${from.id}`
   };
 }
 

@@ -3,6 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { LogRoutingService } from "../application/logs/logRoutingService.js";
 import { SbpTransferRuleAdminService } from "../application/sbp/sbpTransferRuleAdminService.js";
 import { SbpTransferExecutionService } from "../application/sbp/sbpTransferExecutionService.js";
+import { AdminSetupService } from "../application/setup/adminSetupService.js";
 import { ShopItemLimitAdminService } from "../application/shop/shopItemLimitAdminService.js";
 import { ShopPurchaseExecutionService } from "../application/shop/shopPurchaseExecutionService.js";
 import { TelegramUserService } from "../application/users/telegramUserService.js";
@@ -12,6 +13,7 @@ import { registerHealthCommand } from "./commands/healthCommand.js";
 import { registerLimitCommands } from "./commands/limitCommands.js";
 import { registerLogBindingCommands } from "./commands/logBindingCommands.js";
 import { registerOperationCommands } from "./commands/operationCommands.js";
+import { registerSetupCommands } from "./commands/setupCommands.js";
 import { registerStartCommand } from "./commands/startCommand.js";
 import type { BotContext } from "./context.js";
 
@@ -24,10 +26,12 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
   const shopPurchaseExecutionService = new ShopPurchaseExecutionService(db);
   const telegramUserService = new TelegramUserService(db);
   const telegramLogSink = new TelegramLogSink(bot);
+  const adminSetupService = new AdminSetupService(db);
 
   registerStartCommand(bot);
   registerHealthCommand(bot);
   registerLogBindingCommands(bot, logRoutingService, config);
+  registerSetupCommands(bot, adminSetupService, config);
   registerLimitCommands(bot, sbpRuleAdminService, shopItemLimitAdminService, config);
   registerOperationCommands(
     bot,

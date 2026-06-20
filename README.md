@@ -36,6 +36,12 @@ npm run dev
 /bind_super_log <sourceTargetId> <superChatId> <topicId> [title]
 /set_sbp_limit <allianceId> <currencyId|all> <minAmount> <maxAmount> <periodAmountLimit|none> <period>
 /set_item_limit <itemId> <minQty> <maxQty> <periodQtyLimit|none> <period>
+/create_alliance <slug> <name>
+/create_currency <allianceId> <symbol> <name>
+/add_member <allianceId> <telegramId|reply> [member|bank_admin|super_admin]
+/set_balance <allianceId> <currencyId> <telegramId|reply> <amount>
+/create_shop <allianceId> <name>
+/create_item <shopId> <currencyId> <price> <stock|none> <name>
 /sbp <allianceId> <currencyId> <receiverTelegramId|reply> <amount> [comment]
 /buy <itemId> <quantity>
 ```
