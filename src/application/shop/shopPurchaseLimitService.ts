@@ -8,6 +8,8 @@ import {
   type ShopItemPurchaseLimitPolicy
 } from "./itemPurchaseLimitPolicy.js";
 
+type ShopPurchaseLimitDatabase = Pick<PrismaClient, "shopItem" | "shopPurchase">;
+
 export type CheckShopPurchaseInput = {
   userId: number;
   itemId: number;
@@ -23,7 +25,7 @@ export class ShopItemNotFoundError extends Error {
 }
 
 export class ShopPurchaseLimitService {
-  public constructor(private readonly db: PrismaClient) {}
+  public constructor(private readonly db: ShopPurchaseLimitDatabase) {}
 
   public async checkPurchase(input: CheckShopPurchaseInput): Promise<LimitCheckResult> {
     const now = input.now ?? new Date();

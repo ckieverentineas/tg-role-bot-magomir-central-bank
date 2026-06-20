@@ -13,12 +13,14 @@ export type CheckSbpTransferInput = {
   now?: Date;
 };
 
+type SbpTransferLimitDatabase = Pick<PrismaClient, "sbpTransferRule" | "sbpTransfer">;
+
 type DecimalLike = {
   toNumber(): number;
 };
 
 export class SbpTransferLimitService {
-  public constructor(private readonly db: PrismaClient) {}
+  public constructor(private readonly db: SbpTransferLimitDatabase) {}
 
   public async checkTransfer(input: CheckSbpTransferInput): Promise<LimitCheckResult> {
     const now = input.now ?? new Date();

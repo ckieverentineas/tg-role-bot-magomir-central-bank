@@ -36,6 +36,8 @@ npm run dev
 /bind_super_log <sourceTargetId> <superChatId> <topicId> [title]
 /set_sbp_limit <allianceId> <currencyId|all> <minAmount> <maxAmount> <periodAmountLimit|none> <period>
 /set_item_limit <itemId> <minQty> <maxQty> <periodQtyLimit|none> <period>
+/sbp <allianceId> <currencyId> <receiverTelegramId|reply> <amount> [comment]
+/buy <itemId> <quantity>
 ```
 
 Типы логов: `finance`, `progression`, `purchase`, `admin`, `security`, `system`.
