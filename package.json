@@ -1,0 +1,42 @@
+{
+  "name": "telegram-role-bot-magomir-central-bank",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram role-play banking bot for Magomir Central Bank.",
+  "engines": {
+    "node": ">=20.11.0 <25"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "bank",
+    "roleplay"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "prisma": "^6.19.3",
+    "tsx": "^4.22.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "dotenv": "^17.4.2",
+    "grammy": "^1.44.0",
+    "zod": "^4.4.3"
+  }
+}
