@@ -34,6 +34,10 @@ npm run dev
 ```text
 /bind_log <allianceId> <type> <chatId> [topicId] [title]
 /bind_super_log <sourceTargetId> <superChatId> <topicId> [title]
+/set_sbp_limit <allianceId> <currencyId|all> <minAmount> <maxAmount> <periodAmountLimit|none> <period>
+/set_item_limit <itemId> <minQty> <maxQty> <periodQtyLimit|none> <period>
 ```
 
 Типы логов: `finance`, `progression`, `purchase`, `admin`, `security`, `system`.
+
+Периоды лимитов: `unlimited`, `day`, `week`, `month`, произвольные длительности (`10d`, `2w`, `3month`), `until:2026-07-01`, `2026-06-01..2026-07-01`.
