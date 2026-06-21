@@ -3,6 +3,11 @@ import type { LimitPeriodInput } from "../limits/limitPeriodInput.js";
 
 const shopItemLimitSelect = {
   id: true,
+  shop: {
+    select: {
+      allianceId: true
+    }
+  },
   name: true,
   minQuantity: true,
   maxQuantityPerPurchase: true,

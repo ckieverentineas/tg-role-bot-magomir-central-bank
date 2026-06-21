@@ -3,6 +3,8 @@ import type { LogRoutingService } from "../../application/logs/logRoutingService
 import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import type { AppConfig } from "../../config/env.js";
 import { LOG_EVENT_TYPE, type LogEventType } from "../../domain/logs/logEventType.js";
+import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
+import { sendAdminAuditLog } from "../adminAuditLog.js";
 import { requireAdmin, requireAllianceAdmin } from "../middleware/adminOnly.js";
 import type { BotContext } from "../context.js";
 
@@ -30,6 +32,7 @@ const LOG_EVENT_TYPE_BY_ALIAS: Readonly<Record<string, LogEventType>> = {
 export function registerLogBindingCommands(
   bot: Bot<BotContext>,
   logRoutingService: LogRoutingService,
+  telegramLogSink: TelegramLogSink,
   authorizationService: AuthorizationService,
   config: AppConfig
 ): void {
@@ -47,6 +50,20 @@ export function registerLogBindingCommands(
 
     try {
       const target = await logRoutingService.bindLocalTarget(parsed.value);
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: parsed.value.allianceId,
+        action: "Привязка локального лог-чата",
+        details: [
+          `Target: #${target.id}`,
+          `Тип: ${target.eventType}`,
+          `Чат: ${target.chatId.toString()}`,
+          `Тема: ${target.topicId ?? "без темы"}`,
+          `Название: ${target.title ?? "не задано"}`
+        ]
+      });
       await ctx.reply(`Лог-чат привязан: target #${target.id}, ${formatTopic(target.topicId)}.`);
     } catch (error) {
       await ctx.reply(formatError(error));
@@ -67,6 +84,23 @@ export function registerLogBindingCommands(
 
     try {
       const target = await logRoutingService.bindSuperadminMirror(parsed.value);
+      if (target.allianceId !== null) {
+        await sendAdminAuditLog({
+          ctx,
+          logRoutingService,
+          telegramLogSink,
+          allianceId: target.allianceId,
+          action: "Привязка суперадминского зеркала логов",
+          details: [
+            `Mirror target: #${target.id}`,
+            `Source target: #${parsed.value.sourceTargetId}`,
+            `Тип: ${target.eventType}`,
+            `Чат: ${target.chatId.toString()}`,
+            `Тема: ${target.topicId ?? "без темы"}`,
+            `Название: ${target.title ?? "не задано"}`
+          ]
+        });
+      }
       await ctx.reply(`Суперадминское зеркало привязано: target #${target.id}, ${formatTopic(target.topicId)}.`);
     } catch (error) {
       await ctx.reply(formatError(error));

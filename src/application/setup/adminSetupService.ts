@@ -58,7 +58,12 @@ const shopItemSelect = {
   currencyId: true,
   name: true,
   price: true,
-  stock: true
+  stock: true,
+  shop: {
+    select: {
+      allianceId: true
+    }
+  }
 } satisfies Prisma.ShopItemSelect;
 
 export type AllianceView = Prisma.AllianceGetPayload<{ select: typeof allianceSelect }>;
@@ -200,20 +205,18 @@ export class AdminSetupService {
       throw new Error(`Currency ${input.currencyId} was not found in alliance ${input.allianceId}.`);
     }
 
-    const member = await this.addMember({
-      allianceId: input.allianceId,
-      user: input.user
-    });
+    const user = await this.upsertUser(input.user);
+    await this.ensureAllianceMember(input.allianceId, user.id);
 
     return this.db.balance.upsert({
       where: {
         userId_currencyId: {
-          userId: member.user.id,
+          userId: user.id,
           currencyId: input.currencyId
         }
       },
       create: {
-        userId: member.user.id,
+        userId: user.id,
         currencyId: input.currencyId,
         amount: input.amount
       },
@@ -323,6 +326,26 @@ export class AdminSetupService {
         username: profile.username ?? null,
         displayName: profile.displayName
       },
+      select: {
+        id: true
+      }
+    });
+  }
+
+  private async ensureAllianceMember(allianceId: number, userId: number): Promise<void> {
+    await this.db.allianceMember.upsert({
+      where: {
+        allianceId_userId: {
+          allianceId,
+          userId
+        }
+      },
+      create: {
+        allianceId,
+        userId,
+        role: BANK_ROLE.MEMBER
+      },
+      update: {},
       select: {
         id: true
       }

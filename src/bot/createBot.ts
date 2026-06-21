@@ -41,10 +41,17 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
   registerHelpCommand(bot);
   registerHealthCommand(bot);
   registerQueryCommands(bot, accountQueryService);
-  registerLogBindingCommands(bot, logRoutingService, authorizationService, config);
-  registerSetupCommands(bot, adminSetupService, authorizationService, config);
+  registerLogBindingCommands(bot, logRoutingService, telegramLogSink, authorizationService, config);
+  registerSetupCommands(bot, adminSetupService, logRoutingService, telegramLogSink, authorizationService, config);
   registerBalanceAdminCommands(bot, balanceAdjustmentService, logRoutingService, telegramLogSink, authorizationService);
-  registerLimitCommands(bot, sbpRuleAdminService, shopItemLimitAdminService, authorizationService);
+  registerLimitCommands(
+    bot,
+    sbpRuleAdminService,
+    shopItemLimitAdminService,
+    logRoutingService,
+    telegramLogSink,
+    authorizationService
+  );
   registerOperationCommands(
     bot,
     telegramUserService,

@@ -14,6 +14,7 @@ import type {
   ShopView
 } from "../../application/setup/adminSetupService.js";
 import type { AuthorizationService } from "../../application/auth/authorizationService.js";
+import type { LogRoutingService } from "../../application/logs/logRoutingService.js";
 import {
   parseNonNegativeNumber,
   parsePositiveInteger,
@@ -21,6 +22,8 @@ import {
 } from "../../application/limits/limitPeriodInput.js";
 import type { AppConfig } from "../../config/env.js";
 import { parseBankRole, type BankRole } from "../../domain/users/bankRole.js";
+import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
+import { sendAdminAuditLog } from "../adminAuditLog.js";
 import { requireAdmin, requireAllianceAdmin, requireShopAdmin } from "../middleware/adminOnly.js";
 import { parseTelegramUserRef, resolveTelegramUserProfile, type TelegramUserRef } from "../telegramProfiles.js";
 import type { BotContext } from "../context.js";
@@ -46,6 +49,8 @@ export type ParsedSetBalanceCommand = Omit<AddMemberInput, "user" | "role"> & {
 export function registerSetupCommands(
   bot: Bot<BotContext>,
   adminSetupService: AdminSetupService,
+  logRoutingService: LogRoutingService,
+  telegramLogSink: TelegramLogSink,
   authorizationService: AuthorizationService,
   config: AppConfig
 ): void {
@@ -63,6 +68,18 @@ export function registerSetupCommands(
     try {
       const alliance = await adminSetupService.createAlliance(parsed.value);
       await ctx.reply(formatAlliance(alliance));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: alliance.id,
+        action: "Создание или обновление ролевой",
+        details: [
+          `Ролевая: #${alliance.id} ${alliance.name}`,
+          `Slug: ${alliance.slug}`,
+          `Чат: ${alliance.telegramChatId?.toString() ?? "не задан"}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
@@ -86,6 +103,17 @@ export function registerSetupCommands(
     try {
       const currency = await adminSetupService.createCurrency(parsed.value);
       await ctx.reply(formatCurrency(currency));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: currency.allianceId,
+        action: "Создание или обновление валюты",
+        details: [
+          `Валюта: #${currency.id} ${currency.symbol} ${currency.name}`,
+          `Переводы: ${currency.isTransferEnabled ? "включены" : "выключены"}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
@@ -119,6 +147,17 @@ export function registerSetupCommands(
         role: parsed.value.role
       });
       await ctx.reply(formatMember(member));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: member.allianceId,
+        action: "Добавление или обновление участника",
+        details: [
+          `Участник: ${member.user.displayName} (${member.user.telegramId.toString()})`,
+          `Роль: ${member.role}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
@@ -153,6 +192,18 @@ export function registerSetupCommands(
         amount: parsed.value.amount
       });
       await ctx.reply(formatBalance(balance));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: parsed.value.allianceId,
+        action: "Установка баланса",
+        details: [
+          `Участник: ${balance.user.displayName}`,
+          `Валюта: #${balance.currencyId} ${balance.currency.symbol}`,
+          `Баланс: ${balance.amount.toString()}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
@@ -176,6 +227,14 @@ export function registerSetupCommands(
     try {
       const shop = await adminSetupService.createShop(parsed.value);
       await ctx.reply(formatShop(shop));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: shop.allianceId,
+        action: "Создание или обновление магазина",
+        details: [`Магазин: #${shop.id} ${shop.name}`]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
@@ -199,6 +258,20 @@ export function registerSetupCommands(
     try {
       const item = await adminSetupService.createShopItem(parsed.value);
       await ctx.reply(formatShopItem(item));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: item.shop.allianceId,
+        action: "Создание или обновление товара",
+        details: [
+          `Товар: #${item.id} ${item.name}`,
+          `Магазин: #${item.shopId}`,
+          `Валюта: #${item.currencyId}`,
+          `Цена: ${item.price.toString()}`,
+          `Остаток: ${item.stock ?? "без лимита"}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }

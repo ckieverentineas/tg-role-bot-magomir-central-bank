@@ -10,6 +10,7 @@ import type {
   ShopItemLimitView
 } from "../../application/shop/shopItemLimitAdminService.js";
 import type { AuthorizationService } from "../../application/auth/authorizationService.js";
+import type { LogRoutingService } from "../../application/logs/logRoutingService.js";
 import {
   parseLimitPeriodToken,
   parseNonNegativeNumber,
@@ -18,7 +19,8 @@ import {
   parsePositiveNumber,
   type ParseResult
 } from "../../application/limits/limitPeriodInput.js";
-import type { AppConfig } from "../../config/env.js";
+import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
+import { sendAdminAuditLog } from "../adminAuditLog.js";
 import { requireAllianceAdmin, requireShopItemAdmin } from "../middleware/adminOnly.js";
 import type { BotContext } from "../context.js";
 
@@ -32,6 +34,8 @@ export function registerLimitCommands(
   bot: Bot<BotContext>,
   sbpRuleAdminService: SbpTransferRuleAdminService,
   shopItemLimitAdminService: ShopItemLimitAdminService,
+  logRoutingService: LogRoutingService,
+  telegramLogSink: TelegramLogSink,
   authorizationService: AuthorizationService
 ): void {
   bot.command("set_sbp_limit", async (ctx) => {
@@ -49,6 +53,20 @@ export function registerLimitCommands(
     try {
       const rule = await sbpRuleAdminService.setRule(parsed.value);
       await ctx.reply(formatSbpRule(rule));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: rule.allianceId,
+        action: "Настройка лимита СБП",
+        details: [
+          `Правило: #${rule.id}`,
+          `Валюта: ${rule.currencyId ?? "all"}`,
+          `Передача: ${rule.minAmount.toString()}..${rule.maxAmount.toString()}`,
+          `За период: ${rule.periodAmountLimit?.toString() ?? "без общего лимита"}`,
+          `Период: ${formatPeriod(rule.periodKind, rule.periodSeconds, rule.startsAt, rule.endsAt)}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
@@ -69,6 +87,19 @@ export function registerLimitCommands(
     try {
       const item = await shopItemLimitAdminService.setLimit(parsed.value);
       await ctx.reply(formatShopItemLimit(item));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: item.shop.allianceId,
+        action: "Настройка лимита товара",
+        details: [
+          `Товар: #${item.id} ${item.name}`,
+          `Покупка: ${item.minQuantity}..${item.maxQuantityPerPurchase} шт.`,
+          `За период: ${item.periodQuantityLimit ?? "без общего лимита"}`,
+          `Период: ${formatPeriod(item.limitPeriodKind, item.limitPeriodSeconds, item.limitStartsAt, item.limitEndsAt)}`
+        ]
+      });
     } catch (error) {
       await ctx.reply(formatError(error));
     }
