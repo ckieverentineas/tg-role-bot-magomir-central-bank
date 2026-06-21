@@ -14,6 +14,10 @@ const BALANCE_USAGE = "Формат: /balance <allianceId> [telegramId|reply]";
 const ALLIANCE_INFO_USAGE = "Формат: /alliance_info <allianceId>";
 const SHOP_USAGE = "Формат: /shop <shopId>";
 const INVENTORY_USAGE = "Формат: /inventory [telegramId|reply]";
+const HISTORY_USAGE = "Формат: /history <allianceId> [telegramId|reply] [limit]";
+const PURCHASE_HISTORY_USAGE = "Формат: /purchase_history <allianceId> [telegramId|reply] [limit]";
+const DEFAULT_HISTORY_LIMIT = 10;
+const MAX_HISTORY_LIMIT = 30;
 
 export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService: AccountQueryService): void {
   bot.command("profile", async (ctx) => {
@@ -97,6 +101,54 @@ export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService:
     const inventory = await accountQueryService.getInventory(userProfile.value.telegramId);
     await ctx.reply(inventory ? formatInventory(inventory) : "Инвентарь не найден.");
   });
+
+  bot.command("history", async (ctx) => {
+    const parsed = parseHistoryArgs(getCommandArgs(ctx), HISTORY_USAGE);
+    if (!parsed.ok) {
+      await ctx.reply(parsed.message);
+      return;
+    }
+
+    const userProfile = parsed.value.userRef
+      ? resolveTelegramUserProfile(ctx, parsed.value.userRef)
+      : getOwnProfile(ctx);
+
+    if (!userProfile.ok) {
+      await ctx.reply(userProfile.message);
+      return;
+    }
+
+    const history = await accountQueryService.getTransferHistory(
+      parsed.value.allianceId,
+      userProfile.value.telegramId,
+      parsed.value.limit
+    );
+    await ctx.reply(history ? formatTransferHistory(history) : "История переводов не найдена.");
+  });
+
+  bot.command("purchase_history", async (ctx) => {
+    const parsed = parseHistoryArgs(getCommandArgs(ctx), PURCHASE_HISTORY_USAGE);
+    if (!parsed.ok) {
+      await ctx.reply(parsed.message);
+      return;
+    }
+
+    const userProfile = parsed.value.userRef
+      ? resolveTelegramUserProfile(ctx, parsed.value.userRef)
+      : getOwnProfile(ctx);
+
+    if (!userProfile.ok) {
+      await ctx.reply(userProfile.message);
+      return;
+    }
+
+    const history = await accountQueryService.getPurchaseHistory(
+      parsed.value.allianceId,
+      userProfile.value.telegramId,
+      parsed.value.limit
+    );
+    await ctx.reply(history ? formatPurchaseHistory(history) : "История покупок не найдена.");
+  });
 }
 
 export function parseBalanceArgs(args: readonly string[]): ParseResult<{
@@ -135,6 +187,63 @@ export function parseBalanceArgs(args: readonly string[]): ParseResult<{
   };
 }
 
+export function parseHistoryArgs(args: readonly string[], usage = HISTORY_USAGE): ParseResult<{
+  allianceId: number;
+  userRef?: TelegramUserRef;
+  limit: number;
+}> {
+  if (args.length < 1 || args.length > 3) {
+    return { ok: false, message: usage };
+  }
+
+  const allianceId = parsePositiveInteger(args[0], "allianceId должен быть положительным целым числом.");
+  if (!allianceId.ok) {
+    return allianceId;
+  }
+
+  const secondArg = args[1];
+  const thirdArg = args[2];
+  let userRef: TelegramUserRef | undefined;
+  let limit = DEFAULT_HISTORY_LIMIT;
+
+  if (secondArg !== undefined) {
+    const maybeLimit = parseHistoryLimit(secondArg);
+
+    if (thirdArg === undefined) {
+      if (!maybeLimit.ok) {
+        return maybeLimit;
+      }
+
+      limit = maybeLimit.value;
+    } else {
+      const parsedUserRef = parseTelegramUserRef(secondArg);
+      if (!parsedUserRef.ok) {
+        return parsedUserRef;
+      }
+
+      userRef = parsedUserRef.value;
+    }
+  }
+
+  if (thirdArg !== undefined) {
+    const parsedLimit = parseHistoryLimit(thirdArg);
+    if (!parsedLimit.ok) {
+      return parsedLimit;
+    }
+
+    limit = parsedLimit.value;
+  }
+
+  return {
+    ok: true,
+    value: {
+      allianceId: allianceId.value,
+      ...(userRef ? { userRef } : {}),
+      limit
+    }
+  };
+}
+
 function parseOptionalUserRefArgs(
   args: readonly string[],
   usage: string
@@ -162,6 +271,23 @@ function parseSinglePositiveIntArgs(args: readonly string[], usage: string, name
   }
 
   return parsePositiveInteger(args[0], `${name} должен быть положительным целым числом.`);
+}
+
+function parseHistoryLimit(token: string): ParseResult<number> {
+  const parsed = parsePositiveInteger(token, `limit должен быть целым числом от 1 до ${MAX_HISTORY_LIMIT}.`);
+
+  if (!parsed.ok) {
+    return parsed;
+  }
+
+  if (parsed.value > MAX_HISTORY_LIMIT) {
+    return {
+      ok: false,
+      message: `limit должен быть целым числом от 1 до ${MAX_HISTORY_LIMIT}.`
+    };
+  }
+
+  return parsed;
 }
 
 function getOwnProfile(ctx: BotContext): ParseResult<NonNullable<ReturnType<typeof getTelegramUserProfile>>> {
@@ -241,4 +367,47 @@ function formatInventory(inventory: Awaited<ReturnType<AccountQueryService["getI
     : "пусто";
 
   return [`Инвентарь: ${inventory.userDisplayName}`, items].join("\n");
+}
+
+function formatTransferHistory(history: Awaited<ReturnType<AccountQueryService["getTransferHistory"]>> & {}): string {
+  const transfers = history.transfers.length > 0
+    ? history.transfers
+      .map((transfer) => {
+        const direction = transfer.direction === "outgoing" ? "->" : "<-";
+        const comment = transfer.comment ? `, ${transfer.comment}` : "";
+
+        return [
+          `#${transfer.id} ${formatDate(transfer.createdAt)} ${direction} ${transfer.counterpartyDisplayName}`,
+          `${transfer.amount} ${transfer.currencySymbol}, ${transfer.status}${comment}`
+        ].join(" ");
+      })
+      .join("\n")
+    : "операций нет";
+
+  return [
+    `История СБП: ${history.userDisplayName}`,
+    `Ролевая: ${history.allianceName}`,
+    transfers
+  ].join("\n");
+}
+
+function formatPurchaseHistory(history: Awaited<ReturnType<AccountQueryService["getPurchaseHistory"]>> & {}): string {
+  const purchases = history.purchases.length > 0
+    ? history.purchases
+      .map((purchase) => [
+        `#${purchase.id} ${formatDate(purchase.createdAt)} ${purchase.itemName}`,
+        `${purchase.quantity} шт., ${purchase.totalPrice} ${purchase.currencySymbol}, ${purchase.status}`
+      ].join(" "))
+      .join("\n")
+    : "покупок нет";
+
+  return [
+    `История покупок: ${history.userDisplayName}`,
+    `Ролевая: ${history.allianceName}`,
+    purchases
+  ].join("\n");
+}
+
+function formatDate(value: Date): string {
+  return value.toISOString().slice(0, 10);
 }

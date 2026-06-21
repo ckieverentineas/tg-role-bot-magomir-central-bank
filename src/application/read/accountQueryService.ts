@@ -62,9 +62,38 @@ export type InventoryView = {
   }[];
 };
 
+export type TransferHistoryView = {
+  userDisplayName: string;
+  allianceName: string;
+  transfers: {
+    id: number;
+    direction: "incoming" | "outgoing";
+    amount: number;
+    currencySymbol: string;
+    counterpartyDisplayName: string;
+    status: string;
+    comment: string | null;
+    createdAt: Date;
+  }[];
+};
+
+export type PurchaseHistoryView = {
+  userDisplayName: string;
+  allianceName: string;
+  purchases: {
+    id: number;
+    itemName: string;
+    quantity: number;
+    totalPrice: number;
+    currencySymbol: string;
+    status: string;
+    createdAt: Date;
+  }[];
+};
+
 type AccountQueryDatabase = Pick<
   PrismaClient,
-  "user" | "alliance" | "balance" | "shop" | "inventoryItem"
+  "user" | "alliance" | "balance" | "shop" | "inventoryItem" | "sbpTransfer" | "shopPurchase"
 >;
 
 export class AccountQueryService {
@@ -310,6 +339,166 @@ export class AccountQueryService {
         quantity: inventoryItem.quantity,
         createdAt: inventoryItem.createdAt
       }))
+    };
+  }
+
+  public async getTransferHistory(
+    allianceId: number,
+    telegramId: bigint,
+    limit: number
+  ): Promise<TransferHistoryView | null> {
+    const context = await this.getUserAndAlliance(allianceId, telegramId);
+    if (!context) {
+      return null;
+    }
+
+    const transfers = await this.db.sbpTransfer.findMany({
+      where: {
+        allianceId,
+        OR: [
+          { senderUserId: context.userId },
+          { receiverUserId: context.userId }
+        ]
+      },
+      select: {
+        id: true,
+        senderUserId: true,
+        receiverUserId: true,
+        amount: true,
+        status: true,
+        comment: true,
+        createdAt: true,
+        currency: {
+          select: {
+            symbol: true
+          }
+        },
+        sender: {
+          select: {
+            displayName: true
+          }
+        },
+        receiver: {
+          select: {
+            displayName: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: limit
+    });
+
+    return {
+      userDisplayName: context.userDisplayName,
+      allianceName: context.allianceName,
+      transfers: transfers.map((transfer) => {
+        const isOutgoing = transfer.senderUserId === context.userId;
+
+        return {
+          id: transfer.id,
+          direction: isOutgoing ? "outgoing" : "incoming",
+          amount: toMoneyNumber(transfer.amount),
+          currencySymbol: transfer.currency.symbol,
+          counterpartyDisplayName: isOutgoing ? transfer.receiver.displayName : transfer.sender.displayName,
+          status: transfer.status,
+          comment: transfer.comment,
+          createdAt: transfer.createdAt
+        };
+      })
+    };
+  }
+
+  public async getPurchaseHistory(
+    allianceId: number,
+    telegramId: bigint,
+    limit: number
+  ): Promise<PurchaseHistoryView | null> {
+    const context = await this.getUserAndAlliance(allianceId, telegramId);
+    if (!context) {
+      return null;
+    }
+
+    const purchases = await this.db.shopPurchase.findMany({
+      where: {
+        userId: context.userId,
+        item: {
+          shop: {
+            allianceId
+          }
+        }
+      },
+      select: {
+        id: true,
+        quantity: true,
+        totalPrice: true,
+        status: true,
+        createdAt: true,
+        item: {
+          select: {
+            name: true,
+            currency: {
+              select: {
+                symbol: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: limit
+    });
+
+    return {
+      userDisplayName: context.userDisplayName,
+      allianceName: context.allianceName,
+      purchases: purchases.map((purchase) => ({
+        id: purchase.id,
+        itemName: purchase.item.name,
+        quantity: purchase.quantity,
+        totalPrice: toMoneyNumber(purchase.totalPrice),
+        currencySymbol: purchase.item.currency.symbol,
+        status: purchase.status,
+        createdAt: purchase.createdAt
+      }))
+    };
+  }
+
+  private async getUserAndAlliance(
+    allianceId: number,
+    telegramId: bigint
+  ): Promise<{ userId: number; userDisplayName: string; allianceName: string } | null> {
+    const [user, alliance] = await Promise.all([
+      this.db.user.findUnique({
+        where: {
+          telegramId
+        },
+        select: {
+          id: true,
+          displayName: true
+        }
+      }),
+      this.db.alliance.findUnique({
+        where: {
+          id: allianceId
+        },
+        select: {
+          name: true
+        }
+      })
+    ]);
+
+    if (!user || !alliance) {
+      return null;
+    }
+
+    return {
+      userId: user.id,
+      userDisplayName: user.displayName,
+      allianceName: alliance.name
     };
   }
 }

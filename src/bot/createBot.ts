@@ -13,6 +13,7 @@ import { TelegramUserService } from "../application/users/telegramUserService.js
 import type { AppConfig } from "../config/env.js";
 import { TelegramLogSink } from "../infrastructure/telegram/telegramLogSink.js";
 import { registerHealthCommand } from "./commands/healthCommand.js";
+import { registerHelpCommand } from "./commands/helpCommand.js";
 import { registerBalanceAdminCommands } from "./commands/balanceAdminCommands.js";
 import { registerLimitCommands } from "./commands/limitCommands.js";
 import { registerLogBindingCommands } from "./commands/logBindingCommands.js";
@@ -37,6 +38,7 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
   const authorizationService = new AuthorizationService(db, config);
 
   registerStartCommand(bot);
+  registerHelpCommand(bot);
   registerHealthCommand(bot);
   registerQueryCommands(bot, accountQueryService);
   registerLogBindingCommands(bot, logRoutingService, authorizationService, config);

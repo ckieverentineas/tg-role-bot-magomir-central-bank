@@ -45,6 +45,8 @@ npm run dev
 /adjust_balance <allianceId> <currencyId> <telegramId|reply> <+/-amount> [comment]
 /profile [telegramId|reply]
 /balance <allianceId> [telegramId|reply]
+/history <allianceId> [telegramId|reply] [limit]
+/purchase_history <allianceId> [telegramId|reply] [limit]
 /alliance_info <allianceId>
 /shop <shopId>
 /inventory [telegramId|reply]
