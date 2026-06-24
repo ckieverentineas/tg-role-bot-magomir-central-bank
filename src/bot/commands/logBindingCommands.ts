@@ -1,8 +1,9 @@
 import type { Bot } from "grammy";
-import type { LogRoutingService } from "../../application/logs/logRoutingService.js";
+import type { LogDeliveryTarget, LogRoutingService } from "../../application/logs/logRoutingService.js";
 import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import type { AppConfig } from "../../config/env.js";
 import { LOG_EVENT_TYPE, type LogEventType } from "../../domain/logs/logEventType.js";
+import { LOG_TARGET_SCOPE } from "../../domain/logs/logTargetScope.js";
 import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
 import { sendAdminAuditLog } from "../adminAuditLog.js";
 import { requireAdmin, requireAllianceAdmin } from "../middleware/adminOnly.js";
@@ -28,6 +29,8 @@ const LOG_EVENT_TYPE_BY_ALIAS: Readonly<Record<string, LogEventType>> = {
   system: LOG_EVENT_TYPE.SYSTEM,
   "система": LOG_EVENT_TYPE.SYSTEM
 };
+
+const LOG_TARGET_ACTIVE_USAGE = "Формат: /disable_log <targetId> или /enable_log <targetId>";
 
 export function registerLogBindingCommands(
   bot: Bot<BotContext>,
@@ -106,11 +109,84 @@ export function registerLogBindingCommands(
       await ctx.reply(formatError(error));
     }
   });
+
+  bot.command("disable_log", async (ctx) => {
+    await handleLogTargetActiveCommand(ctx, logRoutingService, telegramLogSink, authorizationService, config, false);
+  });
+
+  bot.command("enable_log", async (ctx) => {
+    await handleLogTargetActiveCommand(ctx, logRoutingService, telegramLogSink, authorizationService, config, true);
+  });
+}
+
+async function handleLogTargetActiveCommand(
+  ctx: BotContext,
+  logRoutingService: LogRoutingService,
+  telegramLogSink: TelegramLogSink,
+  authorizationService: AuthorizationService,
+  config: AppConfig,
+  isActive: boolean
+): Promise<void> {
+  const parsed = parseLogTargetActiveArgs(getCommandArgs(ctx));
+  if (!parsed.ok) {
+    await ctx.reply(parsed.message);
+    return;
+  }
+
+  const existingTarget = await logRoutingService.getTarget(parsed.value.targetId);
+  if (!existingTarget) {
+    await ctx.reply("Лог-таргет не найден.");
+    return;
+  }
+
+  if (!(await canManageLogTarget(ctx, existingTarget, authorizationService, config))) {
+    return;
+  }
+
+  try {
+    const target = await logRoutingService.setTargetActive({
+      targetId: parsed.value.targetId,
+      isActive
+    });
+    await ctx.reply(formatLogTargetActive(target, isActive));
+
+    if (target.allianceId !== null) {
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: target.allianceId,
+        action: isActive ? "Включение лог-таргета" : "Отключение лог-таргета",
+        details: [
+          `Target: #${target.id}`,
+          `Scope: ${target.scope}`,
+          `Тип: ${target.eventType}`,
+          `Чат: ${target.chatId.toString()}`,
+          `Тема: ${target.topicId ?? "без темы"}`
+        ]
+      });
+    }
+  } catch (error) {
+    await ctx.reply(formatError(error));
+  }
 }
 
 type ParseResult<T> =
   | { ok: true; value: T }
   | { ok: false; message: string };
+
+async function canManageLogTarget(
+  ctx: BotContext,
+  target: LogDeliveryTarget,
+  authorizationService: AuthorizationService,
+  config: AppConfig
+): Promise<boolean> {
+  if (target.scope === LOG_TARGET_SCOPE.SUPERADMIN_MIRROR || target.allianceId === null) {
+    return requireAdmin(ctx, config);
+  }
+
+  return requireAllianceAdmin(ctx, authorizationService, target.allianceId);
+}
 
 function parseBindLogArgs(args: readonly string[]): ParseResult<{
   allianceId: number;
@@ -188,6 +264,30 @@ function parseBindSuperLogArgs(args: readonly string[]): ParseResult<{
   };
 }
 
+export function parseLogTargetActiveArgs(args: readonly string[]): ParseResult<{ targetId: number }> {
+  if (args.length < 1) {
+    return {
+      ok: false,
+      message: LOG_TARGET_ACTIVE_USAGE
+    };
+  }
+
+  const targetId = parsePositiveInt(args[0]);
+  if (targetId === null) {
+    return {
+      ok: false,
+      message: "targetId должен быть положительным целым числом."
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      targetId
+    }
+  };
+}
+
 function getCommandArgs(ctx: BotContext): string[] {
   const text = ctx.message?.text ?? "";
   const [, ...args] = text.trim().split(/\s+/);
@@ -257,6 +357,10 @@ function parseLogEventType(value: string | undefined): LogEventType | null {
 
 function formatTopic(topicId: number | null): string {
   return topicId === null ? "без темы" : `тема ${topicId}`;
+}
+
+function formatLogTargetActive(target: LogDeliveryTarget, isActive: boolean): string {
+  return `Лог-таргет ${isActive ? "включён" : "отключён"}: target #${target.id}, ${formatTopic(target.topicId)}.`;
 }
 
 function formatError(error: unknown): string {

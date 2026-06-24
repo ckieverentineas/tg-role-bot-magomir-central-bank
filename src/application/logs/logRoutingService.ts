@@ -34,6 +34,11 @@ export type BindSuperadminMirrorInput = {
   createdByUserId?: number;
 };
 
+export type SetLogTargetActiveInput = {
+  targetId: number;
+  isActive: boolean;
+};
+
 export class LogRoutingService {
   public constructor(private readonly db: PrismaClient) {}
 
@@ -70,6 +75,27 @@ export class LogRoutingService {
       ...optional("allianceId", sourceTarget.allianceId ?? undefined),
       ...optional("title", input.title),
       ...optional("createdByUserId", input.createdByUserId)
+    });
+  }
+
+  public async getTarget(targetId: number): Promise<LogDeliveryTarget | null> {
+    return this.db.logTarget.findUnique({
+      where: {
+        id: targetId
+      },
+      select: logTargetSelect
+    });
+  }
+
+  public async setTargetActive(input: SetLogTargetActiveInput): Promise<LogDeliveryTarget> {
+    return this.db.logTarget.update({
+      where: {
+        id: input.targetId
+      },
+      data: {
+        isActive: input.isActive
+      },
+      select: logTargetSelect
     });
   }
 

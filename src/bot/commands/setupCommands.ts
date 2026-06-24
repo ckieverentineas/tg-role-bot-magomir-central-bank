@@ -24,7 +24,7 @@ import type { AppConfig } from "../../config/env.js";
 import { parseBankRole, type BankRole } from "../../domain/users/bankRole.js";
 import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
 import { sendAdminAuditLog } from "../adminAuditLog.js";
-import { requireAdmin, requireAllianceAdmin, requireShopAdmin } from "../middleware/adminOnly.js";
+import { requireAdmin, requireAllianceAdmin, requireShopAdmin, requireShopItemAdmin } from "../middleware/adminOnly.js";
 import { parseTelegramUserRef, resolveTelegramUserProfile, type TelegramUserRef } from "../telegramProfiles.js";
 import type { BotContext } from "../context.js";
 
@@ -34,6 +34,8 @@ const ADD_MEMBER_USAGE = "Формат: /add_member <allianceId> <telegramId|rep
 const SET_BALANCE_USAGE = "Формат: /set_balance <allianceId> <currencyId> <telegramId|reply> <amount>";
 const CREATE_SHOP_USAGE = "Формат: /create_shop <allianceId> <name>";
 const CREATE_ITEM_USAGE = "Формат: /create_item <shopId> <currencyId> <price> <stock|none> <name>";
+const SHOP_VISIBILITY_USAGE = "Формат: /hide_shop <shopId> или /show_shop <shopId>";
+const ITEM_VISIBILITY_USAGE = "Формат: /hide_item <itemId> или /show_item <itemId>";
 
 export type ParsedAddMemberCommand = Omit<AddMemberInput, "user"> & {
   userRef: TelegramUserRef;
@@ -86,10 +88,6 @@ export function registerSetupCommands(
   });
 
   bot.command("create_currency", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseCreateCurrencyArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -120,10 +118,6 @@ export function registerSetupCommands(
   });
 
   bot.command("add_member", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseAddMemberArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -164,10 +158,6 @@ export function registerSetupCommands(
   });
 
   bot.command("set_balance", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseSetBalanceArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -210,10 +200,6 @@ export function registerSetupCommands(
   });
 
   bot.command("create_shop", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseCreateShopArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -241,10 +227,6 @@ export function registerSetupCommands(
   });
 
   bot.command("create_item", async (ctx) => {
-    if (!(await requireAdmin(ctx, config))) {
-      return;
-    }
-
     const parsed = parseCreateShopItemArgs(getCommandArgs(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -276,6 +258,99 @@ export function registerSetupCommands(
       await ctx.reply(formatError(error));
     }
   });
+
+  bot.command("hide_shop", async (ctx) => {
+    await handleShopVisibilityCommand(ctx, adminSetupService, logRoutingService, telegramLogSink, authorizationService, true);
+  });
+
+  bot.command("show_shop", async (ctx) => {
+    await handleShopVisibilityCommand(ctx, adminSetupService, logRoutingService, telegramLogSink, authorizationService, false);
+  });
+
+  bot.command("hide_item", async (ctx) => {
+    await handleShopItemVisibilityCommand(ctx, adminSetupService, logRoutingService, telegramLogSink, authorizationService, true);
+  });
+
+  bot.command("show_item", async (ctx) => {
+    await handleShopItemVisibilityCommand(ctx, adminSetupService, logRoutingService, telegramLogSink, authorizationService, false);
+  });
+}
+
+async function handleShopVisibilityCommand(
+  ctx: BotContext,
+  adminSetupService: AdminSetupService,
+  logRoutingService: LogRoutingService,
+  telegramLogSink: TelegramLogSink,
+  authorizationService: AuthorizationService,
+  isHidden: boolean
+): Promise<void> {
+  const parsed = parseShopVisibilityArgs(getCommandArgs(ctx));
+  if (!parsed.ok) {
+    await ctx.reply(parsed.message);
+    return;
+  }
+
+  if (!(await requireShopAdmin(ctx, authorizationService, parsed.value.shopId))) {
+    return;
+  }
+
+  try {
+    const shop = await adminSetupService.setShopVisibility({
+      shopId: parsed.value.shopId,
+      isHidden
+    });
+    await ctx.reply(formatShopVisibility(shop, isHidden));
+    await sendAdminAuditLog({
+      ctx,
+      logRoutingService,
+      telegramLogSink,
+      allianceId: shop.allianceId,
+      action: isHidden ? "Скрытие магазина" : "Показ магазина",
+      details: [`Магазин: #${shop.id} ${shop.name}`]
+    });
+  } catch (error) {
+    await ctx.reply(formatError(error));
+  }
+}
+
+async function handleShopItemVisibilityCommand(
+  ctx: BotContext,
+  adminSetupService: AdminSetupService,
+  logRoutingService: LogRoutingService,
+  telegramLogSink: TelegramLogSink,
+  authorizationService: AuthorizationService,
+  isHidden: boolean
+): Promise<void> {
+  const parsed = parseShopItemVisibilityArgs(getCommandArgs(ctx));
+  if (!parsed.ok) {
+    await ctx.reply(parsed.message);
+    return;
+  }
+
+  if (!(await requireShopItemAdmin(ctx, authorizationService, parsed.value.itemId))) {
+    return;
+  }
+
+  try {
+    const item = await adminSetupService.setShopItemVisibility({
+      itemId: parsed.value.itemId,
+      isHidden
+    });
+    await ctx.reply(formatShopItemVisibility(item, isHidden));
+    await sendAdminAuditLog({
+      ctx,
+      logRoutingService,
+      telegramLogSink,
+      allianceId: item.shop.allianceId,
+      action: isHidden ? "Скрытие товара" : "Показ товара",
+      details: [
+        `Товар: #${item.id} ${item.name}`,
+        `Магазин: #${item.shopId}`
+      ]
+    });
+  } catch (error) {
+    await ctx.reply(formatError(error));
+  }
 }
 
 export function parseCreateAllianceArgs(
@@ -455,6 +530,42 @@ export function parseCreateShopItemArgs(args: readonly string[]): ParseResult<Cr
   };
 }
 
+export function parseShopVisibilityArgs(args: readonly string[]): ParseResult<{ shopId: number }> {
+  if (args.length < 1) {
+    return { ok: false, message: SHOP_VISIBILITY_USAGE };
+  }
+
+  const shopId = parsePositiveInteger(args[0], "shopId должен быть положительным целым числом.");
+  if (!shopId.ok) {
+    return shopId;
+  }
+
+  return {
+    ok: true,
+    value: {
+      shopId: shopId.value
+    }
+  };
+}
+
+export function parseShopItemVisibilityArgs(args: readonly string[]): ParseResult<{ itemId: number }> {
+  if (args.length < 1) {
+    return { ok: false, message: ITEM_VISIBILITY_USAGE };
+  }
+
+  const itemId = parsePositiveInteger(args[0], "itemId должен быть положительным целым числом.");
+  if (!itemId.ok) {
+    return itemId;
+  }
+
+  return {
+    ok: true,
+    value: {
+      itemId: itemId.value
+    }
+  };
+}
+
 function parseStock(token: string | undefined): ParseResult<{ stock?: number }> {
   if (token === undefined) {
     return { ok: false, message: "stock должен быть целым неотрицательным числом или none." };
@@ -508,6 +619,14 @@ function formatShop(shop: ShopView): string {
 
 function formatShopItem(item: ShopItemView): string {
   return `Товар сохранён: #${item.id} ${item.name}, цена ${item.price.toString()}, остаток ${item.stock ?? "без лимита"}.`;
+}
+
+function formatShopVisibility(shop: ShopView, isHidden: boolean): string {
+  return `Магазин ${isHidden ? "скрыт" : "показан"}: #${shop.id} ${shop.name}.`;
+}
+
+function formatShopItemVisibility(item: ShopItemView, isHidden: boolean): string {
+  return `Товар ${isHidden ? "скрыт" : "показан"}: #${item.id} ${item.name}.`;
 }
 
 function formatError(error: unknown): string {

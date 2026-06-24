@@ -112,6 +112,16 @@ export type CreateShopItemInput = {
   stock?: number;
 };
 
+export type SetShopVisibilityInput = {
+  shopId: number;
+  isHidden: boolean;
+};
+
+export type SetShopItemVisibilityInput = {
+  itemId: number;
+  isHidden: boolean;
+};
+
 export class AdminSetupService {
   public constructor(private readonly db: PrismaClient) {}
 
@@ -307,6 +317,30 @@ export class AdminSetupService {
         price: input.price,
         stock: input.stock ?? null,
         isHidden: false
+      },
+      select: shopItemSelect
+    });
+  }
+
+  public async setShopVisibility(input: SetShopVisibilityInput): Promise<ShopView> {
+    return this.db.shop.update({
+      where: {
+        id: input.shopId
+      },
+      data: {
+        isHidden: input.isHidden
+      },
+      select: shopSelect
+    });
+  }
+
+  public async setShopItemVisibility(input: SetShopItemVisibilityInput): Promise<ShopItemView> {
+    return this.db.shopItem.update({
+      where: {
+        id: input.itemId
+      },
+      data: {
+        isHidden: input.isHidden
       },
       select: shopItemSelect
     });

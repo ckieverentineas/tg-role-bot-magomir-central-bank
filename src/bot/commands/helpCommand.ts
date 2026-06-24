@@ -21,10 +21,16 @@ const HELP_TEXT = [
   "/adjust_balance <allianceId> <currencyId> <telegramId|reply> <+/-amount> [comment]",
   "/create_shop <allianceId> <name>",
   "/create_item <shopId> <currencyId> <price> <stock|none> <name>",
+  "/hide_shop <shopId>",
+  "/show_shop <shopId>",
+  "/hide_item <itemId>",
+  "/show_item <itemId>",
   "/set_sbp_limit <allianceId> <currencyId|all> <minAmount> <maxAmount> <periodAmountLimit|none> <period>",
   "/set_item_limit <itemId> <minQty> <maxQty> <periodQtyLimit|none> <period>",
   "/bind_log <allianceId> <type> <chatId> [topicId] [title]",
-  "/bind_super_log <sourceTargetId> <superChatId> <topicId> [title]"
+  "/bind_super_log <sourceTargetId> <superChatId> <topicId> [title]",
+  "/disable_log <targetId>",
+  "/enable_log <targetId>"
 ].join("\n");
 
 export function registerHelpCommand(bot: Bot<BotContext>): void {

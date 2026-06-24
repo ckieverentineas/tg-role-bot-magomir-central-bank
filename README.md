@@ -43,6 +43,10 @@ npm run dev
 /set_balance <allianceId> <currencyId> <telegramId|reply> <amount>
 /create_shop <allianceId> <name>
 /create_item <shopId> <currencyId> <price> <stock|none> <name>
+/hide_shop <shopId>
+/show_shop <shopId>
+/hide_item <itemId>
+/show_item <itemId>
 /adjust_balance <allianceId> <currencyId> <telegramId|reply> <+/-amount> [comment]
 /profile [telegramId|reply]
 /balance <allianceId> [telegramId|reply]
@@ -53,6 +57,8 @@ npm run dev
 /inventory [telegramId|reply]
 /sbp <allianceId> <currencyId> <receiverTelegramId|reply> <amount> [comment]
 /buy <itemId> <quantity>
+/disable_log <targetId>
+/enable_log <targetId>
 ```
 
 Типы логов: `finance`, `progression`, `purchase`, `admin`, `security`, `system`.

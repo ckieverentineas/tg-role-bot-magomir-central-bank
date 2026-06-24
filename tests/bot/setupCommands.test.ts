@@ -6,6 +6,8 @@ import {
   parseCreateCurrencyArgs,
   parseCreateShopArgs,
   parseCreateShopItemArgs,
+  parseShopItemVisibilityArgs,
+  parseShopVisibilityArgs,
   parseSetBalanceArgs
 } from "../../src/bot/commands/setupCommands.js";
 
@@ -91,6 +93,24 @@ describe("setup command parsers", () => {
         currencyId: 2,
         price: 10,
         name: "Magic Book"
+      }
+    });
+  });
+
+  it("parses shop visibility commands", () => {
+    expect(parseShopVisibilityArgs(["5"])).toEqual({
+      ok: true,
+      value: {
+        shopId: 5
+      }
+    });
+  });
+
+  it("parses item visibility commands", () => {
+    expect(parseShopItemVisibilityArgs(["7"])).toEqual({
+      ok: true,
+      value: {
+        itemId: 7
       }
     });
   });
