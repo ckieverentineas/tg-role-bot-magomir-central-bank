@@ -14,8 +14,18 @@ const currencySelect = {
   allianceId: true,
   name: true,
   symbol: true,
+  symbolCustomEmojiId: true,
   isTransferEnabled: true
 } satisfies Prisma.CurrencySelect;
+
+const facultySelect = {
+  id: true,
+  allianceId: true,
+  name: true,
+  symbol: true,
+  symbolCustomEmojiId: true,
+  isHidden: true
+} satisfies Prisma.FacultySelect;
 
 const memberSelect = {
   id: true,
@@ -68,6 +78,7 @@ const shopItemSelect = {
 
 export type AllianceView = Prisma.AllianceGetPayload<{ select: typeof allianceSelect }>;
 export type CurrencyView = Prisma.CurrencyGetPayload<{ select: typeof currencySelect }>;
+export type FacultyView = Prisma.FacultyGetPayload<{ select: typeof facultySelect }>;
 export type MemberView = Prisma.AllianceMemberGetPayload<{ select: typeof memberSelect }>;
 export type BalanceView = Prisma.BalanceGetPayload<{ select: typeof balanceSelect }>;
 export type ShopView = Prisma.ShopGetPayload<{ select: typeof shopSelect }>;
@@ -83,7 +94,15 @@ export type CreateCurrencyInput = {
   allianceId: number;
   name: string;
   symbol: string;
+  symbolCustomEmojiId?: string;
   isTransferEnabled?: boolean;
+};
+
+export type CreateFacultyInput = {
+  allianceId: number;
+  name: string;
+  symbol: string;
+  symbolCustomEmojiId?: string;
 };
 
 export type AddMemberInput = {
@@ -163,13 +182,43 @@ export class AdminSetupService {
         allianceId: input.allianceId,
         name,
         symbol,
+        symbolCustomEmojiId: input.symbolCustomEmojiId ?? null,
         isTransferEnabled: input.isTransferEnabled ?? true
       },
       update: {
         symbol,
+        symbolCustomEmojiId: input.symbolCustomEmojiId ?? null,
         isTransferEnabled: input.isTransferEnabled ?? true
       },
       select: currencySelect
+    });
+  }
+
+  public async createFaculty(input: CreateFacultyInput): Promise<FacultyView> {
+    const name = normalizeRequiredText(input.name, "Faculty name is required.");
+    const symbol = normalizeRequiredText(input.symbol, "Faculty symbol is required.");
+
+    await this.assertAllianceExists(input.allianceId);
+
+    return this.db.faculty.upsert({
+      where: {
+        allianceId_name: {
+          allianceId: input.allianceId,
+          name
+        }
+      },
+      create: {
+        allianceId: input.allianceId,
+        name,
+        symbol,
+        symbolCustomEmojiId: input.symbolCustomEmojiId ?? null
+      },
+      update: {
+        symbol,
+        symbolCustomEmojiId: input.symbolCustomEmojiId ?? null,
+        isHidden: false
+      },
+      select: facultySelect
     });
   }
 

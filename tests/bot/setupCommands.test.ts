@@ -4,6 +4,7 @@ import {
   parseAddMemberArgs,
   parseCreateAllianceArgs,
   parseCreateCurrencyArgs,
+  parseCreateFacultyArgs,
   parseCreateShopArgs,
   parseCreateShopItemArgs,
   parseShopItemVisibilityArgs,
@@ -30,6 +31,50 @@ describe("setup command parsers", () => {
         allianceId: 1,
         symbol: "G",
         name: "Gold"
+      }
+    });
+  });
+
+  it("keeps custom emoji metadata for currency symbols", () => {
+    expect(parseCreateCurrencyArgs([
+      "1",
+      { text: "G", customEmojiId: "gold_emoji" },
+      "Gold"
+    ])).toEqual({
+      ok: true,
+      value: {
+        allianceId: 1,
+        symbol: "G",
+        symbolCustomEmojiId: "gold_emoji",
+        name: "Gold"
+      }
+    });
+  });
+
+  it("parses faculty creation", () => {
+    expect(parseCreateFacultyArgs(["1", "AIR", "Air", "Faculty"])).toEqual({
+      ok: true,
+      value: {
+        allianceId: 1,
+        symbol: "AIR",
+        name: "Air Faculty"
+      }
+    });
+  });
+
+  it("keeps custom emoji metadata for faculty symbols", () => {
+    expect(parseCreateFacultyArgs([
+      "1",
+      { text: "Air", customEmojiId: "air_emoji" },
+      "Air",
+      "Faculty"
+    ])).toEqual({
+      ok: true,
+      value: {
+        allianceId: 1,
+        symbol: "Air",
+        symbolCustomEmojiId: "air_emoji",
+        name: "Air Faculty"
       }
     });
   });

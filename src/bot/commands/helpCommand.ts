@@ -3,6 +3,10 @@ import type { BotContext } from "../context.js";
 
 const HELP_TEXT = [
   "Команды банка:",
+  "/bank",
+  "/registration_options",
+  "/register <allianceId> <facultyId|none> <characterName> [| class] [| spec]",
+  "/my_registration",
   "/profile [telegramId|reply]",
   "/balance <allianceId> [telegramId|reply]",
   "/history <allianceId> [telegramId|reply] [limit]",
@@ -16,6 +20,7 @@ const HELP_TEXT = [
   "Админ-команды:",
   "/create_alliance <slug> <name>",
   "/create_currency <allianceId> <symbol> <name>",
+  "/create_faculty <allianceId> <symbol> <name>",
   "/add_member <allianceId> <telegramId|reply> [member|bank_admin|super_admin]",
   "/set_balance <allianceId> <currencyId> <telegramId|reply> <amount>",
   "/adjust_balance <allianceId> <currencyId> <telegramId|reply> <+/-amount> [comment]",
@@ -27,8 +32,8 @@ const HELP_TEXT = [
   "/show_item <itemId>",
   "/set_sbp_limit <allianceId> <currencyId|all> <minAmount> <maxAmount> <periodAmountLimit|none> <period>",
   "/set_item_limit <itemId> <minQty> <maxQty> <periodQtyLimit|none> <period>",
-  "/bind_log <allianceId> <type> <chatId> [topicId] [title]",
-  "/bind_super_log <sourceTargetId> <superChatId> <topicId> [title]",
+  "/bind_log <allianceId> <type> [title]",
+  "/bind_super_log <sourceTargetId> [title]",
   "/disable_log <targetId>",
   "/enable_log <targetId>"
 ].join("\n");

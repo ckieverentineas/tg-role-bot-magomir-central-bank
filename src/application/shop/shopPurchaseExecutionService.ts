@@ -57,13 +57,14 @@ export class ShopPurchaseExecutionService {
           },
           shop: {
             select: {
-              allianceId: true
+              allianceId: true,
+              isHidden: true
             }
           }
         }
       });
 
-      if (!item || item.isHidden) {
+      if (!item || item.isHidden || item.shop.isHidden) {
         throw new Error(`Shop item ${input.itemId} was not found.`);
       }
 

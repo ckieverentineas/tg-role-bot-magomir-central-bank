@@ -1,6 +1,8 @@
 import type { Bot } from "grammy";
+import type { AuthorizationService } from "../../application/auth/authorizationService.js";
 import type { AccountQueryService } from "../../application/read/accountQueryService.js";
 import { parsePositiveInteger, type ParseResult } from "../../application/limits/limitPeriodInput.js";
+import { getTelegramId } from "../middleware/adminOnly.js";
 import {
   getTelegramUserProfile,
   parseTelegramUserRef,
@@ -19,7 +21,11 @@ const PURCHASE_HISTORY_USAGE = "Формат: /purchase_history <allianceId> [te
 const DEFAULT_HISTORY_LIMIT = 10;
 const MAX_HISTORY_LIMIT = 30;
 
-export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService: AccountQueryService): void {
+export function registerQueryCommands(
+  bot: Bot<BotContext>,
+  accountQueryService: AccountQueryService,
+  authorizationService: AuthorizationService
+): void {
   bot.command("profile", async (ctx) => {
     const parsed = parseOptionalUserRefArgs(getCommandArgs(ctx), PROFILE_USAGE);
     if (!parsed.ok) {
@@ -33,6 +39,11 @@ export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService:
 
     if (!userProfile.ok) {
       await ctx.reply(userProfile.message);
+      return;
+    }
+
+    if (!authorizationService.canReadUserScopedData(getTelegramId(ctx), userProfile.value.telegramId)) {
+      await ctx.reply("Недостаточно прав для просмотра чужого профиля.");
       return;
     }
 
@@ -53,6 +64,15 @@ export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService:
 
     if (!userProfile.ok) {
       await ctx.reply(userProfile.message);
+      return;
+    }
+
+    if (!(await authorizationService.canReadAllianceUserData(
+      getTelegramId(ctx),
+      userProfile.value.telegramId,
+      parsed.value.allianceId
+    ))) {
+      await ctx.reply("Недостаточно прав для просмотра данных этого участника.");
       return;
     }
 
@@ -98,6 +118,11 @@ export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService:
       return;
     }
 
+    if (!authorizationService.canReadUserScopedData(getTelegramId(ctx), userProfile.value.telegramId)) {
+      await ctx.reply("Недостаточно прав для просмотра чужого инвентаря.");
+      return;
+    }
+
     const inventory = await accountQueryService.getInventory(userProfile.value.telegramId);
     await ctx.reply(inventory ? formatInventory(inventory) : "Инвентарь не найден.");
   });
@@ -115,6 +140,15 @@ export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService:
 
     if (!userProfile.ok) {
       await ctx.reply(userProfile.message);
+      return;
+    }
+
+    if (!(await authorizationService.canReadAllianceUserData(
+      getTelegramId(ctx),
+      userProfile.value.telegramId,
+      parsed.value.allianceId
+    ))) {
+      await ctx.reply("Недостаточно прав для просмотра истории этого участника.");
       return;
     }
 
@@ -139,6 +173,15 @@ export function registerQueryCommands(bot: Bot<BotContext>, accountQueryService:
 
     if (!userProfile.ok) {
       await ctx.reply(userProfile.message);
+      return;
+    }
+
+    if (!(await authorizationService.canReadAllianceUserData(
+      getTelegramId(ctx),
+      userProfile.value.telegramId,
+      parsed.value.allianceId
+    ))) {
+      await ctx.reply("Недостаточно прав для просмотра истории этого участника.");
       return;
     }
 
@@ -312,13 +355,26 @@ function getCommandArgs(ctx: BotContext): string[] {
 
 function formatProfile(profile: Awaited<ReturnType<AccountQueryService["getProfile"]>> & {}): string {
   const alliances = profile.alliances.length > 0
-    ? profile.alliances.map((alliance) => `#${alliance.allianceId} ${alliance.allianceName}: ${alliance.role}`).join("\n")
+    ? profile.alliances.map((alliance) => {
+      const details = [
+        alliance.role,
+        alliance.faculty ? `факультет ${alliance.faculty.symbol} ${alliance.faculty.name}` : "",
+        alliance.className ? `класс ${alliance.className}` : "",
+        alliance.spec ? `спек ${alliance.spec}` : ""
+      ].filter(Boolean).join(", ");
+
+      return `#${alliance.allianceId} ${alliance.allianceName}: ${details}`;
+    }).join("\n")
     : "нет";
 
   return [
     `Профиль #${profile.id}`,
     `Имя: ${profile.displayName}`,
     `Telegram: ${profile.telegramId.toString()}${profile.username ? ` (@${profile.username})` : ""}`,
+    `Персонаж: ${profile.characterName ?? "не указан"}`,
+    `Класс: ${profile.className ?? "не указан"}`,
+    `Спек: ${profile.spec ?? "не указан"}`,
+    `Активная ролевая: ${profile.activeAlliance ? `#${profile.activeAlliance.id} ${profile.activeAlliance.name}` : "не выбрана"}`,
     `Ролевые:\n${alliances}`
   ].join("\n");
 }
@@ -339,6 +395,9 @@ function formatAllianceInfo(alliance: Awaited<ReturnType<AccountQueryService["ge
   const currencies = alliance.currencies.length > 0
     ? alliance.currencies.map((currency) => `#${currency.id} ${currency.symbol} ${currency.name}`).join("\n")
     : "нет";
+  const faculties = alliance.faculties.length > 0
+    ? alliance.faculties.map((faculty) => `#${faculty.id} ${faculty.symbol} ${faculty.name}`).join("\n")
+    : "нет";
   const shops = alliance.shops.length > 0
     ? alliance.shops.map((shop) => `#${shop.id} ${shop.name}`).join("\n")
     : "нет";
@@ -347,6 +406,7 @@ function formatAllianceInfo(alliance: Awaited<ReturnType<AccountQueryService["ge
     `Ролевая #${alliance.id}: ${alliance.name} (${alliance.slug})`,
     `Участников: ${alliance.membersCount}`,
     `Валюты:\n${currencies}`,
+    `Факультеты:\n${faculties}`,
     `Магазины:\n${shops}`
   ].join("\n");
 }

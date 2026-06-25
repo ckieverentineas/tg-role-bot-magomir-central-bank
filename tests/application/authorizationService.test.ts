@@ -40,6 +40,42 @@ describe("AuthorizationService", () => {
     await expect(service.canManageAlliance(200n, 1)).resolves.toBe(false);
   });
 
+  it("allows users to read their own scoped data without database lookup", async () => {
+    const db = createDb();
+    const service = new AuthorizationService(db, {
+      botToken: "token",
+      databaseUrl: "file:./dev.db",
+      adminTelegramIds: []
+    });
+
+    await expect(service.canReadAllianceUserData(200n, 200n, 1)).resolves.toBe(true);
+    expect(service.canReadUserScopedData(200n, 200n)).toBe(true);
+    expect(db.allianceMember.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("allows alliance admins to read another member's alliance-scoped data", async () => {
+    const db = createDb();
+    db.allianceMember.findFirst.mockResolvedValue({ id: 1 });
+    const service = new AuthorizationService(db, {
+      botToken: "token",
+      databaseUrl: "file:./dev.db",
+      adminTelegramIds: []
+    });
+
+    await expect(service.canReadAllianceUserData(200n, 300n, 1)).resolves.toBe(true);
+  });
+
+  it("denies global user-scoped reads for non-admins reading another user", () => {
+    const db = createDb();
+    const service = new AuthorizationService(db, {
+      botToken: "token",
+      databaseUrl: "file:./dev.db",
+      adminTelegramIds: []
+    });
+
+    expect(service.canReadUserScopedData(200n, 300n)).toBe(false);
+  });
+
   it("checks shop item alliance scope", async () => {
     const db = createDb();
     db.shopItem.findUnique.mockResolvedValue({

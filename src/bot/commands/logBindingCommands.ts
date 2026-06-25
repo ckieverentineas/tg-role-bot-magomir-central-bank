@@ -7,6 +7,7 @@ import { LOG_TARGET_SCOPE } from "../../domain/logs/logTargetScope.js";
 import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogSink.js";
 import { sendAdminAuditLog } from "../adminAuditLog.js";
 import { requireAdmin, requireAllianceAdmin } from "../middleware/adminOnly.js";
+import { getCommandArgs } from "../telegramText.js";
 import type { BotContext } from "../context.js";
 
 const LOG_EVENT_TYPE_BY_ALIAS: Readonly<Record<string, LogEventType>> = {
@@ -40,7 +41,7 @@ export function registerLogBindingCommands(
   config: AppConfig
 ): void {
   bot.command("bind_log", async (ctx) => {
-    const parsed = parseBindLogArgs(getCommandArgs(ctx));
+    const parsed = parseBindLogArgs(getCommandArgs(ctx), getCurrentLogLocation(ctx));
 
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -78,7 +79,7 @@ export function registerLogBindingCommands(
       return;
     }
 
-    const parsed = parseBindSuperLogArgs(getCommandArgs(ctx));
+    const parsed = parseBindSuperLogArgs(getCommandArgs(ctx), getCurrentLogLocation(ctx));
 
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
@@ -175,6 +176,11 @@ type ParseResult<T> =
   | { ok: true; value: T }
   | { ok: false; message: string };
 
+type CurrentLogLocation = {
+  chatId?: bigint;
+  topicId?: number;
+};
+
 async function canManageLogTarget(
   ctx: BotContext,
   target: LogDeliveryTarget,
@@ -188,32 +194,46 @@ async function canManageLogTarget(
   return requireAllianceAdmin(ctx, authorizationService, target.allianceId);
 }
 
-function parseBindLogArgs(args: readonly string[]): ParseResult<{
+export function parseBindLogArgs(args: readonly string[], currentLocation: CurrentLogLocation = {}): ParseResult<{
   allianceId: number;
   eventType: LogEventType;
   chatId: bigint;
   topicId?: number;
   title?: string;
 }> {
-  if (args.length < 3) {
+  if (args.length < 2) {
     return {
       ok: false,
-      message: "Формат: /bind_log <allianceId> <type> <chatId> [topicId] [title]"
+      message: "Формат: /bind_log <allianceId> <type> [title] или старый формат: /bind_log <allianceId> <type> <chatId> [topicId] [title]"
     };
   }
 
   const allianceId = parsePositiveInt(args[0]);
   const eventType = parseLogEventType(args[1]);
-  const chatId = parseTelegramChatId(args[2]);
 
-  if (allianceId === null || eventType === null || chatId === null) {
+  if (allianceId === null || eventType === null) {
     return {
       ok: false,
-      message: "Проверьте allianceId, type и chatId. Типы: finance, progression, purchase, admin, security, system."
+      message: "Проверьте allianceId и type. Типы: finance, progression, purchase, admin, security, system."
     };
   }
 
-  const { topicId, title } = parseOptionalTopicAndTitle(args, 3);
+  const explicitChatId = parseTelegramChatId(args[2]);
+  const chatId = explicitChatId ?? currentLocation.chatId;
+
+  if (chatId === undefined) {
+    return {
+      ok: false,
+      message: "Напишите команду в нужном лог-чате/теме или укажите chatId явно."
+    };
+  }
+
+  const { topicId, title } = explicitChatId === null
+    ? {
+        ...optionalCurrentTopic(currentLocation.topicId),
+        ...optionalTitle(args.slice(2).join(" "))
+      }
+    : parseOptionalTopicAndTitle(args, 3);
 
   return {
     ok: true,
@@ -227,38 +247,55 @@ function parseBindLogArgs(args: readonly string[]): ParseResult<{
   };
 }
 
-function parseBindSuperLogArgs(args: readonly string[]): ParseResult<{
+export function parseBindSuperLogArgs(args: readonly string[], currentLocation: CurrentLogLocation = {}): ParseResult<{
   sourceTargetId: number;
   chatId: bigint;
-  topicId: number;
+  topicId?: number;
   title?: string;
 }> {
-  if (args.length < 3) {
+  if (args.length < 1) {
     return {
       ok: false,
-      message: "Формат: /bind_super_log <sourceTargetId> <superChatId> <topicId> [title]"
+      message: "Формат: /bind_super_log <sourceTargetId> [title] или старый формат: /bind_super_log <sourceTargetId> <superChatId> <topicId> [title]"
     };
   }
 
   const sourceTargetId = parsePositiveInt(args[0]);
-  const chatId = parseTelegramChatId(args[1]);
-  const topicId = parsePositiveInt(args[2]);
 
-  if (sourceTargetId === null || chatId === null || topicId === null) {
+  if (sourceTargetId === null) {
     return {
       ok: false,
-      message: "Проверьте sourceTargetId, superChatId и topicId."
+      message: "sourceTargetId должен быть положительным целым числом."
     };
   }
 
-  const title = args.slice(3).join(" ").trim();
+  const explicitChatId = parseTelegramChatId(args[1]);
+  const chatId = explicitChatId ?? currentLocation.chatId;
+
+  if (chatId === undefined) {
+    return {
+      ok: false,
+      message: "Напишите команду в нужном суперлог-чате/теме или укажите superChatId явно."
+    };
+  }
+
+  const explicitTopicId = explicitChatId === null ? undefined : parsePositiveInt(args[2]);
+  if (explicitChatId !== null && explicitTopicId === null) {
+    return {
+      ok: false,
+      message: "Проверьте superChatId и topicId."
+    };
+  }
+
+  const title = explicitChatId === null ? args.slice(1).join(" ").trim() : args.slice(3).join(" ").trim();
+  const topicId = explicitTopicId ?? currentLocation.topicId;
 
   return {
     ok: true,
     value: {
       sourceTargetId,
       chatId,
-      topicId,
+      ...(topicId !== undefined ? { topicId } : {}),
       ...(title ? { title } : {})
     }
   };
@@ -288,13 +325,6 @@ export function parseLogTargetActiveArgs(args: readonly string[]): ParseResult<{
   };
 }
 
-function getCommandArgs(ctx: BotContext): string[] {
-  const text = ctx.message?.text ?? "";
-  const [, ...args] = text.trim().split(/\s+/);
-
-  return args;
-}
-
 function parseOptionalTopicAndTitle(
   args: readonly string[],
   topicIndex: number
@@ -322,6 +352,26 @@ function parseOptionalTopicAndTitle(
   return {
     topicId,
     ...(title ? { title } : {})
+  };
+}
+
+function optionalCurrentTopic(topicId: number | undefined): { topicId?: number } {
+  return topicId === undefined ? {} : { topicId };
+}
+
+function optionalTitle(value: string): { title?: string } {
+  const title = value.trim();
+
+  return title ? { title } : {};
+}
+
+function getCurrentLogLocation(ctx: BotContext): CurrentLogLocation {
+  const chatId = typeof ctx.chat?.id === "number" ? BigInt(ctx.chat.id) : undefined;
+  const topicId = ctx.message && "message_thread_id" in ctx.message ? ctx.message.message_thread_id : undefined;
+
+  return {
+    ...(chatId !== undefined ? { chatId } : {}),
+    ...(typeof topicId === "number" ? { topicId } : {})
   };
 }
 

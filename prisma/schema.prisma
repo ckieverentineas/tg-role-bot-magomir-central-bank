@@ -12,11 +12,16 @@ model User {
   telegramId           BigInt           @unique
   username             String?
   displayName          String
+  characterName        String?
+  className            String?
+  spec                 String?
+  activeAllianceId     Int?
   isPrivate            Boolean          @default(false)
   notificationsEnabled Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
+  activeAlliance       Alliance?        @relation("UserActiveAlliance", fields: [activeAllianceId], references: [id], onDelete: SetNull)
   memberships          AllianceMember[]
   balances             Balance[]
   sentTransfers        SbpTransfer[]    @relation("TransferSender")
@@ -24,6 +29,8 @@ model User {
   purchases            ShopPurchase[]
   inventory            InventoryItem[]
   createdLogTargets    LogTarget[]      @relation("LogTargetCreator")
+
+  @@index([activeAllianceId])
 }
 
 model Alliance {
@@ -35,7 +42,9 @@ model Alliance {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
+  activeUsers    User[]              @relation("UserActiveAlliance")
   members        AllianceMember[]
+  faculties      Faculty[]
   currencies     Currency[]
   shops          Shop[]
   sbpRules       SbpTransferRule[]
@@ -47,6 +56,7 @@ model AllianceMember {
   id         Int      @id @default(autoincrement())
   allianceId Int
   userId     Int
+  facultyId  Int?
   role       String   @default("MEMBER")
   className  String?
   spec       String?
@@ -56,9 +66,11 @@ model AllianceMember {
 
   alliance   Alliance @relation(fields: [allianceId], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  faculty    Faculty? @relation(fields: [facultyId], references: [id], onDelete: SetNull)
 
   @@unique([allianceId, userId])
   @@index([userId])
+  @@index([facultyId])
 }
 
 model Currency {
@@ -66,6 +78,7 @@ model Currency {
   allianceId        Int
   name              String
   symbol            String
+  symbolCustomEmojiId String?
   isTransferEnabled Boolean           @default(true)
   sortOrder         Int               @default(0)
   createdAt         DateTime          @default(now())
@@ -79,6 +92,25 @@ model Currency {
 
   @@unique([allianceId, name])
   @@index([allianceId, sortOrder])
+}
+
+model Faculty {
+  id                  Int              @id @default(autoincrement())
+  allianceId          Int
+  name                String
+  symbol              String
+  symbolCustomEmojiId String?
+  sortOrder           Int              @default(0)
+  isHidden            Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  alliance            Alliance         @relation(fields: [allianceId], references: [id], onDelete: Cascade)
+  members             AllianceMember[]
+
+  @@unique([allianceId, name])
+  @@index([allianceId, sortOrder])
+  @@index([allianceId, isHidden])
 }
 
 model Balance {

@@ -6,9 +6,11 @@ import type {
   BalanceView,
   CreateAllianceInput,
   CreateCurrencyInput,
+  CreateFacultyInput,
   CreateShopInput,
   CreateShopItemInput,
   CurrencyView,
+  FacultyView,
   MemberView,
   ShopItemView,
   ShopView
@@ -26,16 +28,20 @@ import type { TelegramLogSink } from "../../infrastructure/telegram/telegramLogS
 import { sendAdminAuditLog } from "../adminAuditLog.js";
 import { requireAdmin, requireAllianceAdmin, requireShopAdmin, requireShopItemAdmin } from "../middleware/adminOnly.js";
 import { parseTelegramUserRef, resolveTelegramUserProfile, type TelegramUserRef } from "../telegramProfiles.js";
+import { getCommandArgs, getCommandTokens, type TelegramTextToken } from "../telegramText.js";
 import type { BotContext } from "../context.js";
 
 const CREATE_ALLIANCE_USAGE = "Формат: /create_alliance <slug> <name>";
 const CREATE_CURRENCY_USAGE = "Формат: /create_currency <allianceId> <symbol> <name>";
+const CREATE_FACULTY_USAGE = "Формат: /create_faculty <allianceId> <symbol> <name>";
 const ADD_MEMBER_USAGE = "Формат: /add_member <allianceId> <telegramId|reply> [member|bank_admin|super_admin]";
 const SET_BALANCE_USAGE = "Формат: /set_balance <allianceId> <currencyId> <telegramId|reply> <amount>";
 const CREATE_SHOP_USAGE = "Формат: /create_shop <allianceId> <name>";
 const CREATE_ITEM_USAGE = "Формат: /create_item <shopId> <currencyId> <price> <stock|none> <name>";
 const SHOP_VISIBILITY_USAGE = "Формат: /hide_shop <shopId> или /show_shop <shopId>";
 const ITEM_VISIBILITY_USAGE = "Формат: /hide_item <itemId> или /show_item <itemId>";
+
+type SetupArg = string | TelegramTextToken;
 
 export type ParsedAddMemberCommand = Omit<AddMemberInput, "user"> & {
   userRef: TelegramUserRef;
@@ -88,7 +94,7 @@ export function registerSetupCommands(
   });
 
   bot.command("create_currency", async (ctx) => {
-    const parsed = parseCreateCurrencyArgs(getCommandArgs(ctx));
+    const parsed = parseCreateCurrencyArgs(getCommandTokens(ctx));
     if (!parsed.ok) {
       await ctx.reply(parsed.message);
       return;
@@ -111,6 +117,33 @@ export function registerSetupCommands(
           `Валюта: #${currency.id} ${currency.symbol} ${currency.name}`,
           `Переводы: ${currency.isTransferEnabled ? "включены" : "выключены"}`
         ]
+      });
+    } catch (error) {
+      await ctx.reply(formatError(error));
+    }
+  });
+
+  bot.command("create_faculty", async (ctx) => {
+    const parsed = parseCreateFacultyArgs(getCommandTokens(ctx));
+    if (!parsed.ok) {
+      await ctx.reply(parsed.message);
+      return;
+    }
+
+    if (!(await requireAllianceAdmin(ctx, authorizationService, parsed.value.allianceId))) {
+      return;
+    }
+
+    try {
+      const faculty = await adminSetupService.createFaculty(parsed.value);
+      await ctx.reply(formatFaculty(faculty));
+      await sendAdminAuditLog({
+        ctx,
+        logRoutingService,
+        telegramLogSink,
+        allianceId: faculty.allianceId,
+        action: "Создание или обновление факультета",
+        details: [`Факультет: #${faculty.id} ${faculty.symbol} ${faculty.name}`]
       });
     } catch (error) {
       await ctx.reply(formatError(error));
@@ -376,18 +409,19 @@ export function parseCreateAllianceArgs(
   };
 }
 
-export function parseCreateCurrencyArgs(args: readonly string[]): ParseResult<CreateCurrencyInput> {
+export function parseCreateCurrencyArgs(args: readonly SetupArg[]): ParseResult<CreateCurrencyInput> {
   if (args.length < 3) {
     return { ok: false, message: CREATE_CURRENCY_USAGE };
   }
 
-  const allianceId = parsePositiveInteger(args[0], "allianceId должен быть положительным целым числом.");
+  const allianceId = parsePositiveInteger(tokenText(args[0]), "allianceId должен быть положительным целым числом.");
   if (!allianceId.ok) {
     return allianceId;
   }
 
-  const symbol = args[1]?.trim();
-  const name = args.slice(2).join(" ").trim();
+  const symbolToken = args[1];
+  const symbol = tokenText(symbolToken)?.trim();
+  const name = tokensText(args.slice(2));
 
   if (!symbol || !name) {
     return { ok: false, message: CREATE_CURRENCY_USAGE };
@@ -398,7 +432,37 @@ export function parseCreateCurrencyArgs(args: readonly string[]): ParseResult<Cr
     value: {
       allianceId: allianceId.value,
       symbol,
-      name
+      name,
+      ...optionalCustomEmoji(symbolToken)
+    }
+  };
+}
+
+export function parseCreateFacultyArgs(args: readonly SetupArg[]): ParseResult<CreateFacultyInput> {
+  if (args.length < 3) {
+    return { ok: false, message: CREATE_FACULTY_USAGE };
+  }
+
+  const allianceId = parsePositiveInteger(tokenText(args[0]), "allianceId должен быть положительным целым числом.");
+  if (!allianceId.ok) {
+    return allianceId;
+  }
+
+  const symbolToken = args[1];
+  const symbol = tokenText(symbolToken)?.trim();
+  const name = tokensText(args.slice(2));
+
+  if (!symbol || !name) {
+    return { ok: false, message: CREATE_FACULTY_USAGE };
+  }
+
+  return {
+    ok: true,
+    value: {
+      allianceId: allianceId.value,
+      symbol,
+      name,
+      ...optionalCustomEmoji(symbolToken)
     }
   };
 }
@@ -566,6 +630,24 @@ export function parseShopItemVisibilityArgs(args: readonly string[]): ParseResul
   };
 }
 
+function tokenText(token: SetupArg | undefined): string | undefined {
+  return typeof token === "string" ? token : token?.text;
+}
+
+function tokensText(tokens: readonly SetupArg[]): string {
+  return tokens.map((token) => tokenText(token)).join(" ").trim();
+}
+
+function optionalCustomEmoji(token: SetupArg | undefined): { symbolCustomEmojiId?: string } {
+  if (typeof token === "string" || !token?.customEmojiId) {
+    return {};
+  }
+
+  return {
+    symbolCustomEmojiId: token.customEmojiId
+  };
+}
+
 function parseStock(token: string | undefined): ParseResult<{ stock?: number }> {
   if (token === undefined) {
     return { ok: false, message: "stock должен быть целым неотрицательным числом или none." };
@@ -590,19 +672,16 @@ function parseStock(token: string | undefined): ParseResult<{ stock?: number }> 
   };
 }
 
-function getCommandArgs(ctx: BotContext): string[] {
-  const text = ctx.message?.text ?? "";
-  const [, ...args] = text.trim().split(/\s+/);
-
-  return args;
-}
-
 function formatAlliance(alliance: AllianceView): string {
   return `Ролевая сохранена: #${alliance.id} ${alliance.name} (${alliance.slug}).`;
 }
 
 function formatCurrency(currency: CurrencyView): string {
   return `Валюта сохранена: #${currency.id} ${currency.symbol} ${currency.name}.`;
+}
+
+function formatFaculty(faculty: FacultyView): string {
+  return `Факультет сохранён: #${faculty.id} ${faculty.symbol} ${faculty.name}.`;
 }
 
 function formatMember(member: MemberView): string {

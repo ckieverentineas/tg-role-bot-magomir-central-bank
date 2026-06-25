@@ -6,10 +6,24 @@ export type ProfileView = {
   telegramId: bigint;
   username: string | null;
   displayName: string;
+  characterName: string | null;
+  className: string | null;
+  spec: string | null;
+  activeAlliance: {
+    id: number;
+    name: string;
+  } | null;
   alliances: {
     allianceId: number;
     allianceName: string;
     role: string;
+    className: string | null;
+    spec: string | null;
+    faculty: {
+      id: number;
+      name: string;
+      symbol: string;
+    } | null;
   }[];
 };
 
@@ -29,6 +43,11 @@ export type AllianceInfoView = {
   slug: string;
   name: string;
   currencies: {
+    id: number;
+    name: string;
+    symbol: string;
+  }[];
+  faculties: {
     id: number;
     name: string;
     symbol: string;
@@ -109,10 +128,28 @@ export class AccountQueryService {
         telegramId: true,
         username: true,
         displayName: true,
+        characterName: true,
+        className: true,
+        spec: true,
+        activeAlliance: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         memberships: {
           select: {
             allianceId: true,
             role: true,
+            className: true,
+            spec: true,
+            faculty: {
+              select: {
+                id: true,
+                name: true,
+                symbol: true
+              }
+            },
             alliance: {
               select: {
                 name: true
@@ -135,10 +172,17 @@ export class AccountQueryService {
       telegramId: user.telegramId,
       username: user.username,
       displayName: user.displayName,
+      characterName: user.characterName,
+      className: user.className,
+      spec: user.spec,
+      activeAlliance: user.activeAlliance,
       alliances: user.memberships.map((membership) => ({
         allianceId: membership.allianceId,
         allianceName: membership.alliance.name,
-        role: membership.role
+        role: membership.role,
+        className: membership.className,
+        spec: membership.spec,
+        faculty: membership.faculty
       }))
     };
   }
@@ -150,7 +194,8 @@ export class AccountQueryService {
       },
       select: {
         id: true,
-        displayName: true
+        displayName: true,
+        characterName: true
       }
     });
 
@@ -190,7 +235,7 @@ export class AccountQueryService {
     }
 
     return {
-      userDisplayName: user.displayName,
+      userDisplayName: formatUserName(user),
       allianceName: alliance.name,
       balances: alliance.currencies.map((currency) => ({
         currencyId: currency.id,
@@ -219,6 +264,24 @@ export class AccountQueryService {
           orderBy: {
             sortOrder: "asc"
           }
+        },
+        faculties: {
+          where: {
+            isHidden: false
+          },
+          select: {
+            id: true,
+            name: true,
+            symbol: true
+          },
+          orderBy: [
+            {
+              sortOrder: "asc"
+            },
+            {
+              id: "asc"
+            }
+          ]
         },
         shops: {
           where: {
@@ -249,15 +312,18 @@ export class AccountQueryService {
       slug: alliance.slug,
       name: alliance.name,
       currencies: alliance.currencies,
+      faculties: alliance.faculties,
       shops: alliance.shops,
       membersCount: alliance._count.members
     };
   }
 
-  public async getShopItems(shopId: number): Promise<ShopItemsView | null> {
-    const shop = await this.db.shop.findUnique({
+  public async getShopItems(shopId: number, allianceId?: number): Promise<ShopItemsView | null> {
+    const shop = await this.db.shop.findFirst({
       where: {
-        id: shopId
+        id: shopId,
+        isHidden: false,
+        ...(allianceId !== undefined ? { allianceId } : {})
       },
       select: {
         id: true,
@@ -309,6 +375,7 @@ export class AccountQueryService {
       select: {
         id: true,
         displayName: true,
+        characterName: true,
         inventory: {
           select: {
             id: true,
@@ -332,7 +399,7 @@ export class AccountQueryService {
     }
 
     return {
-      userDisplayName: user.displayName,
+      userDisplayName: formatUserName(user),
       items: user.inventory.map((inventoryItem) => ({
         id: inventoryItem.id,
         name: inventoryItem.item.name,
@@ -375,12 +442,14 @@ export class AccountQueryService {
         },
         sender: {
           select: {
-            displayName: true
+            displayName: true,
+            characterName: true
           }
         },
         receiver: {
           select: {
-            displayName: true
+            displayName: true,
+            characterName: true
           }
         }
       },
@@ -401,7 +470,7 @@ export class AccountQueryService {
           direction: isOutgoing ? "outgoing" : "incoming",
           amount: toMoneyNumber(transfer.amount),
           currencySymbol: transfer.currency.symbol,
-          counterpartyDisplayName: isOutgoing ? transfer.receiver.displayName : transfer.sender.displayName,
+          counterpartyDisplayName: isOutgoing ? formatUserName(transfer.receiver) : formatUserName(transfer.sender),
           status: transfer.status,
           comment: transfer.comment,
           createdAt: transfer.createdAt
@@ -478,7 +547,8 @@ export class AccountQueryService {
         },
         select: {
           id: true,
-          displayName: true
+          displayName: true,
+          characterName: true
         }
       }),
       this.db.alliance.findUnique({
@@ -497,8 +567,12 @@ export class AccountQueryService {
 
     return {
       userId: user.id,
-      userDisplayName: user.displayName,
+      userDisplayName: formatUserName(user),
       allianceName: alliance.name
     };
   }
+}
+
+function formatUserName(user: { displayName: string; characterName: string | null }): string {
+  return user.characterName ?? user.displayName;
 }

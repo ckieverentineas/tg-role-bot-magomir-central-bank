@@ -4,6 +4,7 @@ import { AuthorizationService } from "../application/auth/authorizationService.j
 import { BalanceAdjustmentService } from "../application/banking/balanceAdjustmentService.js";
 import { LogRoutingService } from "../application/logs/logRoutingService.js";
 import { AccountQueryService } from "../application/read/accountQueryService.js";
+import { PlayerRegistrationService } from "../application/registration/playerRegistrationService.js";
 import { SbpTransferRuleAdminService } from "../application/sbp/sbpTransferRuleAdminService.js";
 import { SbpTransferExecutionService } from "../application/sbp/sbpTransferExecutionService.js";
 import { AdminSetupService } from "../application/setup/adminSetupService.js";
@@ -19,8 +20,9 @@ import { registerLimitCommands } from "./commands/limitCommands.js";
 import { registerLogBindingCommands } from "./commands/logBindingCommands.js";
 import { registerOperationCommands } from "./commands/operationCommands.js";
 import { registerQueryCommands } from "./commands/queryCommands.js";
+import { registerRegistrationCommands } from "./commands/registrationCommands.js";
 import { registerSetupCommands } from "./commands/setupCommands.js";
-import { registerStartCommand } from "./commands/startCommand.js";
+import { registerBankMenu } from "./menus/bankMenu.js";
 import type { BotContext } from "./context.js";
 
 export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> {
@@ -34,13 +36,14 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
   const telegramLogSink = new TelegramLogSink(bot);
   const adminSetupService = new AdminSetupService(db);
   const accountQueryService = new AccountQueryService(db);
+  const playerRegistrationService = new PlayerRegistrationService(db);
   const balanceAdjustmentService = new BalanceAdjustmentService(db);
   const authorizationService = new AuthorizationService(db, config);
 
-  registerStartCommand(bot);
   registerHelpCommand(bot);
   registerHealthCommand(bot);
-  registerQueryCommands(bot, accountQueryService);
+  registerRegistrationCommands(bot, playerRegistrationService);
+  registerQueryCommands(bot, accountQueryService, authorizationService);
   registerLogBindingCommands(bot, logRoutingService, telegramLogSink, authorizationService, config);
   registerSetupCommands(bot, adminSetupService, logRoutingService, telegramLogSink, authorizationService, config);
   registerBalanceAdminCommands(bot, balanceAdjustmentService, logRoutingService, telegramLogSink, authorizationService);
@@ -60,6 +63,7 @@ export function createBot(config: AppConfig, db: PrismaClient): Bot<BotContext> 
     logRoutingService,
     telegramLogSink
   );
+  registerBankMenu(bot, playerRegistrationService, accountQueryService);
 
   bot.catch((error) => {
     console.error("Telegram bot error", error);

@@ -18,6 +18,22 @@ export class AuthorizationService {
     return this.config.adminTelegramIds.some((adminId) => adminId === telegramId);
   }
 
+  public canReadUserScopedData(telegramId: bigint | undefined, targetTelegramId: bigint): boolean {
+    return telegramId !== undefined && (telegramId === targetTelegramId || this.isGlobalAdmin(telegramId));
+  }
+
+  public async canReadAllianceUserData(
+    telegramId: bigint | undefined,
+    targetTelegramId: bigint,
+    allianceId: number
+  ): Promise<boolean> {
+    if (this.canReadUserScopedData(telegramId, targetTelegramId)) {
+      return true;
+    }
+
+    return this.canManageAlliance(telegramId, allianceId);
+  }
+
   public async canManageAlliance(telegramId: bigint | undefined, allianceId: number): Promise<boolean> {
     if (this.isGlobalAdmin(telegramId)) {
       return true;

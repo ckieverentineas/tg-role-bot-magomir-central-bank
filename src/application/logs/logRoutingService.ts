@@ -29,7 +29,7 @@ export type BindLocalLogTargetInput = {
 export type BindSuperadminMirrorInput = {
   sourceTargetId: number;
   chatId: bigint;
-  topicId: number;
+  topicId?: number;
   title?: string;
   createdByUserId?: number;
 };
@@ -70,7 +70,7 @@ export class LogRoutingService {
       scope: LOG_TARGET_SCOPE.SUPERADMIN_MIRROR,
       eventType: parseLogEventType(sourceTarget.eventType),
       chatId: input.chatId,
-      topicId: input.topicId,
+      ...optional("topicId", input.topicId),
       sourceTargetId: sourceTarget.id,
       ...optional("allianceId", sourceTarget.allianceId ?? undefined),
       ...optional("title", input.title),
